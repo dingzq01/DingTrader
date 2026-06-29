@@ -46,6 +46,6 @@ class SectorManager:
                 return sector["Code"]
         return None
 
-    def get_builtin_sectors(self) -> list[dict]:
-        """获取通达信内置的概念板块和行业板块列表。"""
+    def get_builtin_sectors(self) -> list:
+        """获取通达信内置的概念板块和行业板块列表。返回字符串或字典列表。"""
         return self._client.tq.get_sector_list()

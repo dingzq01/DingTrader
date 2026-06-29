@@ -21,9 +21,14 @@ def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:
     logger.info("builtin_sectors_count", total=len(builtin_sectors))
 
     for sector in builtin_sectors:
-        sector_code = sector.get("Code", "")
-        sector_name = sector.get("Name", "")
-        sector_type = sector.get("Type", "")  # concept or industry
+        if isinstance(sector, dict):
+            sector_code = sector.get("Code", "")
+            sector_name = sector.get("Name", "")
+            sector_type = sector.get("Type", "")
+        else:
+            sector_code = str(sector)
+            sector_name = ""
+            sector_type = ""
 
         try:
             stocks = sm.get_stocks_in_sector(sector_code, block_type=0)
