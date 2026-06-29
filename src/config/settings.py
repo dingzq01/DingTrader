@@ -7,11 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class DatabaseConfig(BaseModel):
-    host: str = "localhost"
+    host: str = "192.168.2.101"
     port: int = 5432
-    dbname: str = "dingtrader"
-    user: str = "postgres"
-    password: str = ""
+    dbname: str = "dtrader"
+    user: str = "root"
+    password: str = "123456"
 
     @property
     def dsn(self) -> str:
