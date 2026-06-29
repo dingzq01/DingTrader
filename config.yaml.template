@@ -1,0 +1,31 @@
+database:
+  host: localhost
+  port: 5432
+  dbname: dingtrader
+  user: postgres
+  password: ""
+
+tdx:
+  install_path: "C:\\1new_tdx64"
+
+feishu:
+  webhook_url: ""
+  keyword: "Dbacktrader"
+
+backtest:
+  default_cash: 100000
+  commission_rate: 0.00025
+  stamp_tax_rate: 0.001
+  slippage: 0.01
+
+sync:
+  lookback_years: 3
+  batch_size: 10
+  request_interval_seconds: 1
+  max_retries: 3
+
+strategies:
+  enabled:
+    - limit_up_consolidation
+    - macd_golden_cross
+    - obv_bottom_divergence
