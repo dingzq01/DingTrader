@@ -120,6 +120,7 @@ def init_db(engine=None):
     eng = engine or get_engine()
     Base.metadata.create_all(eng)
     with eng.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(text(
             "SELECT create_hypertable('daily_kline', 'trade_date', "
             "chunk_time_interval => INTERVAL '1 month', "
