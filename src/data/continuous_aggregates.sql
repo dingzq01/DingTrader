@@ -43,8 +43,8 @@ stock_with_sector AS (
         ssp.amount,
         ssp.prev_close,
         ss.sector_code,
-        ss.sector_name,
-        ss.sector_type
+        s.sector_name,
+        s.sector_type
     FROM stock_daily_pct ssp
     JOIN sector_stocks ss ON ssp.stock_code = ss.stock_code
     JOIN sectors s ON ss.sector_code = s.sector_code

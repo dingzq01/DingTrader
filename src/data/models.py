@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -112,3 +113,16 @@ def get_engine(dsn: str | None = None):
 def get_session(engine=None):
     eng = engine or get_engine()
     return sessionmaker(bind=eng)()
+
+
+def init_db(engine=None):
+    """Create all tables and convert daily_kline to hypertable. Idempotent."""
+    eng = engine or get_engine()
+    Base.metadata.create_all(eng)
+    with eng.connect() as conn:
+        conn.execute(text(
+            "SELECT create_hypertable('daily_kline', 'trade_date', "
+            "chunk_time_interval => INTERVAL '1 month', "
+            "if_not_exists => TRUE)"
+        ))
+        conn.commit()

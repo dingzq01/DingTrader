@@ -7,6 +7,7 @@ from src.data.models import (
     SectorStock,
     get_engine,
     get_session,
+    init_db,
 )
 from src.tq_bridge.client import TQClient
 from src.utils.logging import get_logger
@@ -57,6 +58,9 @@ def full_sync(client: TQClient):
     """
     logger.info("full_sync_started")
 
+    # 0. 确保数据库表存在
+    init_db()
+
     # 1. 获取所有板块及个股
     sector_df = fetch_all_sector_stocks(client)
     if sector_df.empty:
@@ -93,6 +97,9 @@ def check_data_integrity(client: TQClient) -> dict:
 
     Returns: {sector_name: {expected, actual, missing_count}} 字典。
     """
+    # 确保数据库表存在
+    init_db()
+
     sector_df = fetch_all_sector_stocks(client)
     if sector_df.empty:
         return {}
