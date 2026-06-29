@@ -16,13 +16,13 @@ class TQClient:
         self.pyplugins_path = settings.tdx.pyplugins_path
         self._tq = None
 
-    def initialize(self, script_path: str = __file__):
+    def initialize(self):
         if self.pyplugins_path not in sys.path:
             sys.path.insert(0, self.pyplugins_path)
         from tqcenter import tq
 
         self._tq = tq
-        tq.initialize(script_path)
+        tq.initialize(self.tdx_path)
         logger.info("tq_initialized", tdx_path=self.tdx_path)
 
     def close(self):
@@ -45,8 +45,8 @@ class TQClient:
         return False
 
     @contextmanager
-    def session(self, script_path: str = __file__):
-        self.initialize(script_path)
+    def session(self):
+        self.initialize()
         try:
             yield self
         finally:
