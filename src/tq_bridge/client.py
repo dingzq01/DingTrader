@@ -36,6 +36,14 @@ class TQClient:
             raise RuntimeError("TQ not initialized. Call initialize() first.")
         return self._tq
 
+    def __enter__(self):
+        self.initialize()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
     @contextmanager
     def session(self, script_path: str = __file__):
         self.initialize(script_path)
