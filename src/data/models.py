@@ -83,17 +83,10 @@ class IndicatorsData(Base):
     """个股指标值 (EAV模式, 支持动态新增指标)"""
 
     __tablename__ = "indicators_data"
-    __table_args__ = (
-        UniqueConstraint(
-            "stock_code", "trade_date", "indicator_name",
-            name="uq_stock_indicator_date_name",
-        ),
-    )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    stock_code = Column(String(10), nullable=False, index=True)
-    trade_date = Column(Date, nullable=False)
-    indicator_name = Column(String(50), nullable=False)
+    stock_code = Column(String(10), primary_key=True, index=True)
+    trade_date = Column(Date, primary_key=True)
+    indicator_name = Column(String(50), primary_key=True)
     indicator_value = Column(Float)
 
 

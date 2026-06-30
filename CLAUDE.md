@@ -59,10 +59,10 @@ Config is loaded from `config.yaml` (gitignored) with `config.yaml.template` as 
 
 ## Database (TimescaleDB)
 
-- **daily_kline**: Hypertable on `trade_date`, stores OHLCV per stock
+- **stock_data**: Hypertable on `trade_date`, stores OHLCV per stock
 - **sectors** / **sector_stocks**: Sector metadata and membership
-- **stock_indicators**: EAV pattern — `(stock_code, trade_date, indicator_name, indicator_value)` — supports dynamic new indicators without schema changes
-- **sector_daily_agg**: Sector-level daily aggregates (up/down/limit counts)
+- **indicators_data**: EAV pattern — `(stock_code, trade_date, indicator_name, indicator_value)` — supports dynamic new indicators without schema changes
+- **block_data**: Block (sector) daily K-line data
 - **continuous_aggregates.sql**: Pre-computed materialized views for Grafana
 
 ## Strategy Development
