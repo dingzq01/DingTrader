@@ -51,13 +51,9 @@ class DailyKline(Base):
     """个股日K线 (TimescaleDB hypertable)"""
 
     __tablename__ = "daily_kline"
-    __table_args__ = (
-        UniqueConstraint("stock_code", "trade_date", name="uq_stock_date"),
-    )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    stock_code = Column(String(10), nullable=False, index=True)
-    trade_date = Column(Date, nullable=False)
+    stock_code = Column(String(10), primary_key=True, index=True)
+    trade_date = Column(Date, primary_key=True)
     open = Column(Float)
     high = Column(Float)
     low = Column(Float)
