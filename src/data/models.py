@@ -101,11 +101,26 @@ def get_session(engine=None):
     return sessionmaker(bind=eng)()
 
 
+def _ensure_indicators_data_pk(conn):
+    """兼容历史schema：先修复 indicators_data 的主键，避免 Timescale 创建失败。"""
+
+    conn.execute(text("ALTER TABLE IF EXISTS indicators_data DROP CONSTRAINT IF EXISTS indicators_data_pkey"))
+    conn.execute(
+        text(
+            "ALTER TABLE IF EXISTS indicators_data "
+            "ADD CONSTRAINT indicators_data_pkey PRIMARY KEY (stock_code, trade_date, indicator_name)"
+        )
+    )
+
+
 def init_db(engine=None):
     """Create all tables and convert stock_data, block_data to hypertables. Idempotent."""
     eng = engine or get_engine()
     Base.metadata.create_all(eng)
     with eng.connect() as conn:
+        # 先修复历史版本下的主键结构，再创建 hypertable（Timescale 约束要求分区列在唯一/主键中）
+        _ensure_indicators_data_pk(conn)
+
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(text(
             "SELECT create_hypertable('stock_data', 'trade_date', "
