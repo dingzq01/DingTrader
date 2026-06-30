@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.data.fetcher import fetch_all_sector_stocks, get_unique_stock_list
@@ -37,7 +38,7 @@ def sync_sector_metadata(session: Session, sector_df) -> None:
         # 同步板块-个股关联
         for _, stock_row in group.iterrows():
             existing = session.execute(
-                "SELECT 1 FROM sector_stocks WHERE sector_code = :sc AND stock_code = :st",
+                text("SELECT 1 FROM sector_stocks WHERE sector_code = :sc AND stock_code = :st"),
                 {"sc": sector_code, "st": stock_row["stock_code"]},
             ).first()
             if not existing:
