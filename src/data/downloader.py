@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.config.settings import get_settings
-from src.data.models import DailyKline, get_engine, get_session
+from src.data.models import StockData, get_engine, get_session
 from src.tq_bridge.client import TQClient
 from src.tq_bridge.market_data import MarketDataAPI
 from src.utils.logging import get_logger
@@ -47,8 +47,8 @@ def download_stock_kline(
             return 0
 
         for _, row in new_rows.iterrows():
-            session.add(DailyKline(
-                stock_code=stock_code,
+            session.add(StockData(
+                code=stock_code,
                 trade_date=row["date"],
                 open=row["open"],
                 high=row["high"],
@@ -73,7 +73,7 @@ def get_existing_dates(session: Session, stock_code: str) -> set[date]:
     """查询某只股票在数据库中已有的日期集合。"""
     result = session.execute(
         text(
-            "SELECT trade_date FROM daily_kline WHERE stock_code = :code"
+            "SELECT trade_date FROM stock_data WHERE code = :code"
         ),
         {"code": stock_code},
     ).fetchall()

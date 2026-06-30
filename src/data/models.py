@@ -25,8 +25,8 @@ class Sector(Base):
 
     __tablename__ = "sectors"
 
-    sector_code = Column(String(20), primary_key=True)
-    sector_name = Column(String(100), nullable=False)
+    code = Column(String(20), primary_key=True)
+    name = Column(String(100), nullable=False)
     sector_type = Column(String(20), nullable=False)  # concept / industry
     stock_count = Column(Integer, default=0)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -47,12 +47,13 @@ class SectorStock(Base):
     added_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
-class DailyKline(Base):
+class StockData(Base):
     """个股日K线 (TimescaleDB hypertable)"""
 
-    __tablename__ = "daily_kline"
+    __tablename__ = "stock_data"
 
-    stock_code = Column(String(10), primary_key=True, index=True)
+    code = Column(String(10), primary_key=True, index=True)
+    name = Column(String(50))
     trade_date = Column(Date, primary_key=True)
     open = Column(Float)
     high = Column(Float)
@@ -62,10 +63,26 @@ class DailyKline(Base):
     amount = Column(Float)
 
 
-class StockIndicator(Base):
+class BlockData(Base):
+    """板块日K线 (TimescaleDB hypertable)"""
+
+    __tablename__ = "block_data"
+
+    code = Column(String(20), primary_key=True, index=True)
+    name = Column(String(100))
+    trade_date = Column(Date, primary_key=True)
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
+    volume = Column(Float)
+    amount = Column(Float)
+
+
+class IndicatorsData(Base):
     """个股指标值 (EAV模式, 支持动态新增指标)"""
 
-    __tablename__ = "stock_indicators"
+    __tablename__ = "indicators_data"
     __table_args__ = (
         UniqueConstraint(
             "stock_code", "trade_date", "indicator_name",
@@ -80,26 +97,6 @@ class StockIndicator(Base):
     indicator_value = Column(Float)
 
 
-class SectorDailyAgg(Base):
-    """板块日聚合数据 (由 Continuous Aggregate 维护，此为普通表用于存储手动刷新结果)"""
-
-    __tablename__ = "sector_daily_agg"
-    __table_args__ = (
-        UniqueConstraint("sector_code", "trade_date", name="uq_sector_agg_date"),
-    )
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    sector_code = Column(String(20), nullable=False, index=True)
-    trade_date = Column(Date, nullable=False)
-    total_stocks = Column(Integer, default=0)
-    up_count = Column(Integer, default=0)
-    down_count = Column(Integer, default=0)
-    flat_count = Column(Integer, default=0)
-    limit_up_count = Column(Integer, default=0)
-    limit_down_count = Column(Integer, default=0)
-    avg_pct_change = Column(Float)
-
-
 def get_engine(dsn: str | None = None):
     settings = get_settings()
     url = dsn or settings.database.dsn
@@ -112,13 +109,23 @@ def get_session(engine=None):
 
 
 def init_db(engine=None):
-    """Create all tables and convert daily_kline to hypertable. Idempotent."""
+    """Create all tables and convert stock_data, block_data to hypertables. Idempotent."""
     eng = engine or get_engine()
     Base.metadata.create_all(eng)
     with eng.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(text(
-            "SELECT create_hypertable('daily_kline', 'trade_date', "
+            "SELECT create_hypertable('stock_data', 'trade_date', "
+            "chunk_time_interval => INTERVAL '1 month', "
+            "if_not_exists => TRUE)"
+        ))
+        conn.execute(text(
+            "SELECT create_hypertable('block_data', 'trade_date', "
+            "chunk_time_interval => INTERVAL '1 month', "
+            "if_not_exists => TRUE)"
+        ))
+        conn.execute(text(
+            "SELECT create_hypertable('indicators_data', 'trade_date', "
             "chunk_time_interval => INTERVAL '1 month', "
             "if_not_exists => TRUE)"
         ))

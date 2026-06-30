@@ -8,7 +8,7 @@ class BaseIndicator(ABC):
     """指标计算基类。
 
     子类需实现:
-        name: 指标名称（用于存储到 stock_indicators 表）
+        name: 指标名称（用于存储到 indicators_data 表）
         compute(df, params): 核心计算逻辑
     """
 

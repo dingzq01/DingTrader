@@ -49,7 +49,7 @@ class TimescaleDBData(bt.feeds.PandasData):
         try:
             query = text(
                 "SELECT trade_date, open, high, low, close, volume "
-                "FROM daily_kline WHERE stock_code = :code "
+                "FROM stock_data WHERE code = :code "
                 "AND trade_date BETWEEN :from_date AND :to_date "
                 "ORDER BY trade_date ASC"
             )

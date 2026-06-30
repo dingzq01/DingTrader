@@ -25,12 +25,12 @@ def sync_sector_metadata(session: Session, sector_df) -> None:
         row = group.iloc[0]
         sector = session.get(Sector, sector_code)
         if sector:
-            sector.sector_name = row["sector_name"]
+            sector.name = row["sector_name"]
             sector.stock_count = len(group)
         else:
             session.add(Sector(
-                sector_code=sector_code,
-                sector_name=row["sector_name"],
+                code=sector_code,
+                name=row["sector_name"],
                 sector_type=row["sector_type"],
                 stock_count=len(group),
             ))
@@ -114,7 +114,7 @@ def check_data_integrity(client: TQClient) -> dict:
             # 查询数据库中该板块的个股
             db_stocks = set(
                 session.execute(
-                    "SELECT DISTINCT stock_code FROM daily_kline"
+                    text("SELECT DISTINCT code FROM stock_data")
                 ).scalars().all()
             )
             missing = expected_stocks - db_stocks
