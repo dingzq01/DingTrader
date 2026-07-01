@@ -21,19 +21,19 @@ class Base(DeclarativeBase):
 
 
 class Sector(Base):
-    """概念板块 / 行业板块"""
+    """兼容旧 schema：仍保留旧表映射，不作为主流程依赖。"""
 
     __tablename__ = "sectors"
 
     code = Column(String(20), primary_key=True)
     name = Column(String(100), nullable=False)
-    sector_type = Column(String(20), nullable=False)  # concept / industry
+    sector_type = Column(String(20), nullable=False)
     stock_count = Column(Integer, default=0)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class SectorStock(Base):
-    """板块-个股 关联"""
+    """兼容旧 schema：仍保留旧表映射，不作为主流程依赖。"""
 
     __tablename__ = "sector_stocks"
     __table_args__ = (
@@ -45,6 +45,24 @@ class SectorStock(Base):
     stock_code = Column(String(10), nullable=False, index=True)
     stock_name = Column(String(50))
     added_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class StockBlockRelation(Base):
+    """板块-个股关系新主链路。"""
+
+    __tablename__ = "stock_block_relation"
+    __table_args__ = (
+        UniqueConstraint("block_code", "stock_code", name="uq_stock_block_relation"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    block_code = Column(String(20), nullable=False, index=True)
+    block_name = Column(String(100), nullable=False)
+    stock_code = Column(String(10), nullable=False, index=True)
+    stock_name = Column(String(50))
+    block_type = Column(String(20), nullable=False)
+    is_active = Column(Integer, default=1)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class StockData(Base):
@@ -79,8 +97,44 @@ class BlockData(Base):
     amount = Column(Float)
 
 
+class StockIndicators(Base):
+    """个股指标新主表。"""
+
+    __tablename__ = "stock_indicators"
+
+    stock_code = Column(String(10), primary_key=True, index=True)
+    trade_date = Column(Date, primary_key=True)
+    macd = Column(Float)
+    signal = Column(Float)
+    hist = Column(Float)
+    obv = Column(Float)
+    obv_slope = Column(Float)
+    volume_ma = Column(Float)
+    limit_up_ratio = Column(Float)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class BlockIndicators(Base):
+    """板块指标新主表。"""
+
+    __tablename__ = "block_indicators"
+
+    block_code = Column(String(20), primary_key=True, index=True)
+    trade_date = Column(Date, primary_key=True)
+    up_count = Column(Integer)
+    down_count = Column(Integer)
+    limit_up_count = Column(Integer)
+    limit_down_count = Column(Integer)
+    avg_pct_change = Column(Float)
+    weighted_pct_change = Column(Float)
+    up_down_ratio = Column(Float)
+    total_amount_yi = Column(Float)
+    total_volume_wan = Column(Float)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class IndicatorsData(Base):
-    """个股指标值 (EAV模式, 支持动态新增指标)"""
+    """兼容旧 schema：仍保留旧表映射，不作为主流程依赖。"""
 
     __tablename__ = "indicators_data"
 
@@ -101,25 +155,26 @@ def get_session(engine=None):
     return sessionmaker(bind=eng)()
 
 
-def _ensure_indicators_data_pk(conn):
-    """兼容历史schema：先修复 indicators_data 的主键，避免 Timescale 创建失败。"""
-
-    conn.execute(text("ALTER TABLE IF EXISTS indicators_data DROP CONSTRAINT IF EXISTS indicators_data_pkey"))
+def _ensure_pk(conn, table_name: str, columns: tuple[str, ...], constraint_name: str):
+    conn.execute(text(f"ALTER TABLE IF EXISTS {table_name} DROP CONSTRAINT IF EXISTS {constraint_name}"))
+    cols = ", ".join(columns)
     conn.execute(
         text(
-            "ALTER TABLE IF EXISTS indicators_data "
-            "ADD CONSTRAINT indicators_data_pkey PRIMARY KEY (stock_code, trade_date, indicator_name)"
+            f"ALTER TABLE IF EXISTS {table_name} "
+            f"ADD CONSTRAINT {constraint_name} PRIMARY KEY ({cols})"
         )
     )
 
 
 def init_db(engine=None):
-    """Create all tables and convert stock_data, block_data to hypertables. Idempotent."""
+    """Create all tables and convert TimescaleDB hypertables."""
     eng = engine or get_engine()
     Base.metadata.create_all(eng)
     with eng.connect() as conn:
-        # 先修复历史版本下的主键结构，再创建 hypertable（Timescale 约束要求分区列在唯一/主键中）
-        _ensure_indicators_data_pk(conn)
+        _ensure_pk(conn, "stock_block_relation", ("block_code", "stock_code"), "stock_block_relation_pkey")
+        _ensure_pk(conn, "stock_indicators", ("stock_code", "trade_date"), "stock_indicators_pkey")
+        _ensure_pk(conn, "block_indicators", ("block_code", "trade_date"), "block_indicators_pkey")
+        _ensure_pk(conn, "indicators_data", ("stock_code", "trade_date", "indicator_name"), "indicators_data_pkey")
 
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(text(
@@ -133,7 +188,7 @@ def init_db(engine=None):
             "if_not_exists => TRUE)"
         ))
         conn.execute(text(
-            "SELECT create_hypertable('indicators_data', 'trade_date', "
+            "SELECT create_hypertable('stock_indicators', 'trade_date', "
             "chunk_time_interval => INTERVAL '1 month', "
             "if_not_exists => TRUE)"
         ))
