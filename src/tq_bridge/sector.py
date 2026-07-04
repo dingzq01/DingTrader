@@ -14,9 +14,9 @@ class SectorManager:
         """获取所有自定义板块列表。"""
         return self._client.tq.get_user_sector()
 
-    def get_stocks_in_sector(self, sector_code: str, block_type: int = 1) -> list[str]:
+    def get_stocks_in_sector(self, sector_code: str, list_type: int = 1) -> list[str]:
         """获取指定板块下的所有股票代码。"""
-        return self._client.tq.get_stock_list_in_sector(sector_code, block_type=block_type)
+        return self._client.tq.get_stock_list_in_sector(sector_code, list_type=list_type)
 
     def create_sector(self, block_code: str, block_name: str):
         """创建自定义板块（已存在则忽略）。"""
