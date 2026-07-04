@@ -117,11 +117,15 @@ def download_stocks_batch(
     for idx, stock in enumerate(target_stocks):
         stock_code = stock["stock_code"]
         stock_name = stock.get("stock_name")
-        if stock_name is None:
-            count = download_stock_kline(client, stock_code)
-        else:
-            count = download_stock_kline(client, stock_code, stock_name)
-        results[stock_code] = count
+        try:
+            if stock_name is None:
+                count = download_stock_kline(client, stock_code)
+            else:
+                count = download_stock_kline(client, stock_code, stock_name)
+            results[stock_code] = count
+        except Exception:
+            logger.exception("download_stock_failed", stock_code=stock_code)
+            results[stock_code] = 0
 
         if idx + 1 < len(target_stocks):
             time.sleep(settings.sync.request_interval_seconds)

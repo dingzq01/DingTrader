@@ -103,17 +103,6 @@ class BlockIndicators(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
-class IndicatorsData(Base):
-    """兼容旧 schema：仍保留旧表映射，不作为主流程依赖。"""
-
-    __tablename__ = "indicators_data"
-
-    stock_code = Column(String(10), primary_key=True, index=True)
-    trade_date = Column(Date, primary_key=True)
-    indicator_name = Column(String(50), primary_key=True)
-    indicator_value = Column(Float)
-
-
 def get_engine(dsn: str | None = None):
     settings = get_settings()
     url = dsn or settings.database.dsn
@@ -221,8 +210,6 @@ def init_db(engine=None):
         _ensure_pk(conn, "stock_block_relation", ("block_code", "stock_code"), "stock_block_relation_pkey")
         _ensure_pk(conn, "stock_indicators", ("stock_code", "trade_date"), "stock_indicators_pkey")
         _ensure_pk(conn, "block_indicators", ("block_code", "trade_date"), "block_indicators_pkey")
-        _ensure_pk(conn, "indicators_data", ("stock_code", "trade_date", "indicator_name"), "indicators_data_pkey")
-
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(
             text(
