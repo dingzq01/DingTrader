@@ -14,9 +14,9 @@ class SectorManager:
         """获取所有自定义板块列表。"""
         return self._client.tq.get_user_sector()
 
-    def get_stocks_in_sector(self, sector_code: str, block_type: int = 1) -> list[str]:
+    def get_stocks_in_sector(self, sector_code: str, list_type: int = 1) -> list[str]:
         """获取指定板块下的所有股票代码。"""
-        return self._client.tq.get_stock_list_in_sector(sector_code, block_type=block_type)
+        return self._client.tq.get_stock_list_in_sector(sector_code, list_type=list_type)
 
     def create_sector(self, block_code: str, block_name: str):
         """创建自定义板块（已存在则忽略）。"""
@@ -47,5 +47,21 @@ class SectorManager:
         return None
 
     def get_builtin_sectors(self) -> list:
-        """获取通达信内置的概念板块和行业板块列表。返回字符串或字典列表。"""
-        return self._client.tq.get_sector_list()
+        """获取通达信内置的概念板块和行业板块列表。返回带 block_type 标记的字典列表。
+
+        11 = 行业板块, 12 = 概念板块。
+        """
+        results: list[dict] = []
+
+        for tq_type in ("11", "12"):
+            block_type = tq_type  # "11" 行业, "12" 概念
+            sectors = self._client.tq.get_stock_list(tq_type, list_type=1)
+            for s in sectors:
+                if isinstance(s, dict):
+                    item = dict(s)
+                else:
+                    item = {"Code": str(s), "Name": ""}
+                item["block_type"] = block_type
+                results.append(item)
+
+        return results

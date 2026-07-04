@@ -54,7 +54,7 @@ def main():
 
     # 3. Refresh materialized views (initial population)
     with engine.connect() as conn:
-        conn.execute(text("REFRESH MATERIALIZED VIEW sector_daily_stats"))
+        conn.execute(text("REFRESH MATERIALIZED VIEW block_daily_stats"))
         conn.commit()
     logger.info("materialized_views_refreshed")
 
