@@ -38,7 +38,7 @@ def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:
             block_type = ""
 
         try:
-            stocks = sm.get_stocks_in_sector(block_code, block_type=1)
+            stocks = sm.get_stocks_in_sector(block_code, list_type=1)
         except Exception as e:
             logger.warning("fetch_sector_stocks_failed",
                            sector_name=block_name, error=str(e))
