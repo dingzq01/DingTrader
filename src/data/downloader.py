@@ -66,6 +66,7 @@ def download_stock_kline(
                 trade_date=row["date"],
                 open=row["open"],
                 high=row["high"],
+                low=row["low"],
                 close=row["close"],
                 volume=row["volume"],
             ))
