@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import date
+import time
 
 import pandas as pd
 from sqlalchemy import text
@@ -14,10 +15,19 @@ from src.utils.retry import retry_on_failure
 logger = get_logger(__name__)
 
 
+def is_target_market(stock_code: str) -> bool:
+    """是否为主流程需要同步的 A 股代码。"""
+    if not stock_code or len(stock_code) != 6 or not stock_code.isdigit():
+        return False
+
+    return stock_code.startswith(("0", "3", "6", "688"))
+
+
 @retry_on_failure(max_retries=3, base_delay=1.0)
 def download_stock_kline(
     client: TQClient,
     stock_code: str,
+    stock_name: str | None = None,
     session: Session | None = None,
 ) -> int:
     """下载单只股票的历史K线并写入 TimescaleDB。
@@ -46,13 +56,16 @@ def download_stock_kline(
         if new_rows.empty:
             return 0
 
+        # 名称若为空，统一用代码回退
+        final_name = stock_name if stock_name else stock_code
+
         for _, row in new_rows.iterrows():
             session.add(StockData(
                 code=stock_code,
+                name=final_name,
                 trade_date=row["date"],
                 open=row["open"],
                 high=row["high"],
-                low=row["low"],
                 close=row["close"],
                 volume=row["volume"],
             ))
@@ -82,7 +95,7 @@ def get_existing_dates(session: Session, stock_code: str) -> set[date]:
 
 def download_stocks_batch(
     client: TQClient,
-    stock_list: list[str],
+    stock_list: list[dict[str, str]] | list[str],
 ) -> dict[str, int]:
     """批量下载股票K线数据。
 
@@ -91,11 +104,30 @@ def download_stocks_batch(
     settings = get_settings()
     results = {}
 
-    for stock_code in stock_list:
-        count = download_stock_kline(client, stock_code)
+    # Normalize input to records
+    stocks: list[dict[str, str]]
+    if stock_list and isinstance(stock_list[0], dict):
+        stocks = stock_list
+    else:
+        stocks = [{"stock_code": code} for code in stock_list]
+
+    target_stocks = [row for row in stocks if is_target_market(row["stock_code"])]
+
+    for idx, stock in enumerate(target_stocks):
+        stock_code = stock["stock_code"]
+        stock_name = stock.get("stock_name")
+        if stock_name is None:
+            count = download_stock_kline(client, stock_code)
+        else:
+            count = download_stock_kline(client, stock_code, stock_name)
         results[stock_code] = count
 
-    logger.info("batch_download_complete",
-                total_stocks=len(stock_list),
-                total_rows=sum(results.values()))
+        if idx + 1 < len(target_stocks):
+            time.sleep(settings.sync.request_interval_seconds)
+
+    logger.info(
+        "batch_download_complete",
+        total_stocks=len(target_stocks),
+        total_rows=sum(results.values()),
+    )
     return results

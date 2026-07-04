@@ -9,10 +9,17 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+def is_target_market(stock_code: str) -> bool:
+    """是否为主流程同步的 A 股代码。"""
+    if not stock_code or len(stock_code) != 6 or not stock_code.isdigit():
+        return False
+    return stock_code.startswith(("0", "3", "6", "688"))
+
+
 def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:
     """获取所有概念板块和行业板块及其包含的个股列表。
 
-    Returns DataFrame with columns: sector_code, sector_name, sector_type, stock_code, stock_name.
+    Returns DataFrame with columns: block_code, block_name, block_type, stock_code, stock_name.
     """
     sm = SectorManager(client)
     all_records = []
@@ -22,19 +29,19 @@ def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:
 
     for sector in builtin_sectors:
         if isinstance(sector, dict):
-            sector_code = sector.get("Code", "")
-            sector_name = sector.get("Name", "")
-            sector_type = sector.get("Type", "")
+            block_code = sector.get("Code", "")
+            block_name = sector.get("Name", "")
+            block_type = sector.get("Type", "")
         else:
-            sector_code = str(sector)
-            sector_name = ""
-            sector_type = ""
+            block_code = str(sector)
+            block_name = ""
+            block_type = ""
 
         try:
-            stocks = sm.get_stocks_in_sector(sector_code, block_type=0)
+            stocks = sm.get_stocks_in_sector(block_code, block_type=0)
         except Exception as e:
             logger.warning("fetch_sector_stocks_failed",
-                           sector_name=sector_name, error=str(e))
+                           sector_name=block_name, error=str(e))
             continue
 
         for stock in stocks:
@@ -47,15 +54,15 @@ def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:
                 stock_name = ""
 
             all_records.append({
-                "sector_code": sector_code,
-                "sector_name": sector_name,
-                "sector_type": sector_type,
+                "block_code": block_code,
+                "block_name": block_name,
+                "block_type": block_type,
                 "stock_code": stock_code,
                 "stock_name": stock_name,
             })
 
         logger.debug("sector_stocks_fetched",
-                     sector=sector_name, stock_count=len(stocks))
+                     sector=block_name, stock_count=len(stocks))
 
     df = pd.DataFrame(all_records)
     logger.info("all_sectors_fetched",

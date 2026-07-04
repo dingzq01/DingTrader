@@ -19,3 +19,14 @@ def test_continuous_aggregates_uses_new_table_names_and_indexes():
     assert "block_indicators" in sql
     assert "block_daily_stats" in sql
     assert "sector_daily_stats" not in sql
+
+
+def test_stock_data_name_is_not_nullable():
+    assert "name = Column(String(50), nullable=False)" in Path("src/data/models.py").read_text(encoding="utf-8")
+
+
+def test_no_amount_columns_in_stock_or_block_data_models():
+    model_text = Path("src/data/models.py").read_text(encoding="utf-8")
+    assert "class StockData" in model_text
+    assert "amount" not in model_text[model_text.find("class StockData"):model_text.find("class BlockData")]
+    assert "amount" not in model_text[model_text.find("class BlockData"):model_text.find("class StockIndicators")]

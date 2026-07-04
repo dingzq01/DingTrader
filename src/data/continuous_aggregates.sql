@@ -11,7 +11,6 @@ WITH stock_daily_pct AS (
         sd.close,
         sd.open,
         sd.volume,
-        sd.amount,
         LAG(sd.close) OVER (
             PARTITION BY sd.code ORDER BY sd.trade_date
         ) AS prev_close
@@ -24,7 +23,6 @@ stock_with_block AS (
         sdp.close,
         sdp.open,
         sdp.volume,
-        sdp.amount,
         sdp.prev_close,
         sbr.block_code,
         sbr.block_name,
@@ -50,8 +48,8 @@ SELECT
     ) AS limit_down_count,
     ROUND(AVG((close - prev_close) / prev_close * 100)::numeric, 2) AS avg_pct_change,
     ROUND(
-        SUM((close - prev_close) / prev_close * 100 * amount)
-        / NULLIF(SUM(amount), 0)::numeric,
+        SUM((close - prev_close) / prev_close * 100 * volume)
+        / NULLIF(SUM(volume), 0)::numeric,
         2
     ) AS weighted_pct_change,
     ROUND(
@@ -59,8 +57,8 @@ SELECT
         / NULLIF(COUNT(DISTINCT stock_code) FILTER (WHERE close < prev_close), 0)::numeric,
         2
     ) AS up_down_ratio,
-    ROUND(SUM(amount)::numeric / 100000000, 2) AS total_amount_yi,
-    ROUND(SUM(volume)::numeric / 10000, 2) AS total_volume_wan
+    ROUND(SUM(volume)::numeric / 10000, 2) AS total_volume_wan,
+    SUM(volume) AS total_volume
 FROM stock_with_block
 GROUP BY block_code, trade_date
 ORDER BY trade_date DESC, weighted_pct_change DESC;
@@ -78,13 +76,13 @@ WITH sector_ranked AS (
         down_count,
         stock_count,
         limit_up_count,
-        total_amount_yi,
+        total_volume_wan,
         RANK() OVER (
             PARTITION BY trade_date ORDER BY weighted_pct_change DESC
         ) AS daily_rank,
         RANK() OVER (
-            PARTITION BY trade_date ORDER BY total_amount_yi DESC
-        ) AS amount_rank
+            PARTITION BY trade_date ORDER BY total_volume_wan DESC
+        ) AS volume_rank
     FROM block_daily_stats
 ),
 sector_momentum AS (
@@ -92,14 +90,14 @@ sector_momentum AS (
         block_code,
         trade_date,
         daily_rank,
-        amount_rank,
+        volume_rank,
         weighted_pct_change,
         up_down_ratio,
         up_count,
         down_count,
         stock_count,
         limit_up_count,
-        total_amount_yi,
+        total_volume_wan,
         SUM(weighted_pct_change) OVER (
             PARTITION BY block_code
             ORDER BY trade_date
