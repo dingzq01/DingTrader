@@ -31,14 +31,14 @@ def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:
         if isinstance(sector, dict):
             block_code = sector.get("Code", "")
             block_name = sector.get("Name", "")
-            block_type = sector.get("Type", "")
+            block_type = sector.get("block_type", "")
         else:
             block_code = str(sector)
             block_name = ""
             block_type = ""
 
         try:
-            stocks = sm.get_stocks_in_sector(block_code, block_type=0)
+            stocks = sm.get_stocks_in_sector(block_code, block_type=1)
         except Exception as e:
             logger.warning("fetch_sector_stocks_failed",
                            sector_name=block_name, error=str(e))

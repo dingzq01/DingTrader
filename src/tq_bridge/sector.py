@@ -47,5 +47,21 @@ class SectorManager:
         return None
 
     def get_builtin_sectors(self) -> list:
-        """获取通达信内置的概念板块和行业板块列表。返回字符串或字典列表。"""
-        return self._client.tq.get_sector_list()
+        """获取通达信内置的概念板块和行业板块列表。返回带 block_type 标记的字典列表。
+
+        11 = 行业板块, 12 = 概念板块。
+        """
+        results: list[dict] = []
+
+        for tq_type in ("11", "12"):
+            block_type = tq_type  # "11" 行业, "12" 概念
+            sectors = self._client.tq.get_stock_list(tq_type, list_type=1)
+            for s in sectors:
+                if isinstance(s, dict):
+                    item = dict(s)
+                else:
+                    item = {"Code": str(s), "Name": ""}
+                item["block_type"] = block_type
+                results.append(item)
+
+        return results
