@@ -51,6 +51,7 @@ class StockData(Base):
     low = Column(Float)
     close = Column(Float)
     volume = Column(Float)
+    amount = Column(Float)
 
 
 class BlockData(Base):
@@ -66,40 +67,30 @@ class BlockData(Base):
     low = Column(Float)
     close = Column(Float)
     volume = Column(Float)
+    amount = Column(Float)
 
 
 class StockIndicators(Base):
-    """个股指标新主表。"""
+    """个股指标表 (EAV 模式 — 每个指标值一行，新增指标无需改表)。"""
 
     __tablename__ = "stock_indicators"
 
-    stock_code = Column(String(10), primary_key=True, index=True)
+    stock_code = Column(String(10), primary_key=True)
     trade_date = Column(Date, primary_key=True)
-    macd = Column(Float)
-    signal = Column(Float)
-    hist = Column(Float)
-    obv = Column(Float)
-    obv_slope = Column(Float)
-    volume_ma = Column(Float)
-    limit_up_ratio = Column(Float)
+    indicator_name = Column(String(50), primary_key=True)
+    indicator_value = Column(Float)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class BlockIndicators(Base):
-    """板块指标新主表。"""
+    """板块指标表 (EAV 模式 — 每个指标值一行，新增指标无需改表)。"""
 
     __tablename__ = "block_indicators"
 
-    block_code = Column(String(20), primary_key=True, index=True)
+    block_code = Column(String(20), primary_key=True)
     trade_date = Column(Date, primary_key=True)
-    up_count = Column(Integer)
-    down_count = Column(Integer)
-    limit_up_count = Column(Integer)
-    limit_down_count = Column(Integer)
-    avg_pct_change = Column(Float)
-    weighted_pct_change = Column(Float)
-    up_down_ratio = Column(Float)
-    total_volume_wan = Column(Float)
+    indicator_name = Column(String(50), primary_key=True)
+    indicator_value = Column(Float)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -156,17 +147,6 @@ def _drop_legacy_sector_tables(conn):
         conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
 
-def _drop_legacy_amount_columns(conn):
-    drops = (
-        ("stock_data", "amount"),
-        ("block_data", "amount"),
-        ("block_indicators", "total_amount_yi"),
-    )
-    for table_name, column_name in drops:
-        if _column_exists(conn, table_name, column_name):
-            conn.execute(
-                text(f"ALTER TABLE IF EXISTS {table_name} DROP COLUMN {column_name}")
-            )
 
 
 def _fill_stock_name_from_relation(conn):
@@ -195,21 +175,34 @@ def _ensure_not_null_stock_name(conn):
     conn.execute(text("ALTER TABLE IF EXISTS stock_data ALTER COLUMN name SET NOT NULL"))
 
 
+def _migrate_legacy_indicator_tables(conn):
+    """检测旧固定列 indicator 表并自动迁移为 EAV 模式。"""
+    # stock_indicators: 旧表有 macd 列 → DROP 重建
+    if _table_exists(conn, "stock_indicators") and _column_exists(conn, "stock_indicators", "macd"):
+        conn.execute(text("DROP TABLE IF EXISTS stock_indicators CASCADE"))
+    # block_indicators: 旧表有 up_count 列 → DROP 重建
+    if _table_exists(conn, "block_indicators") and _column_exists(conn, "block_indicators", "up_count"):
+        conn.execute(text("DROP TABLE IF EXISTS block_indicators CASCADE"))
+
+
 def init_db(engine=None):
     """Create all tables and convert TimescaleDB hypertables."""
     eng = engine or get_engine()
     Base.metadata.create_all(eng)
     with eng.connect() as conn:
         _drop_legacy_sector_tables(conn)
-        _drop_legacy_amount_columns(conn)
+        _migrate_legacy_indicator_tables(conn)
+
+        # 旧表被 DROP 后，重新创建新 EAV 表
+        Base.metadata.create_all(eng)
 
         if _table_exists(conn, "stock_block_relation"):
             _fill_stock_name_from_relation(conn)
             _ensure_not_null_stock_name(conn)
 
         _ensure_pk(conn, "stock_block_relation", ("block_code", "stock_code"), "stock_block_relation_pkey")
-        _ensure_pk(conn, "stock_indicators", ("stock_code", "trade_date"), "stock_indicators_pkey")
-        _ensure_pk(conn, "block_indicators", ("block_code", "trade_date"), "block_indicators_pkey")
+        _ensure_pk(conn, "stock_indicators", ("stock_code", "trade_date", "indicator_name"), "stock_indicators_pkey")
+        _ensure_pk(conn, "block_indicators", ("block_code", "trade_date", "indicator_name"), "block_indicators_pkey")
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(
             text(
@@ -228,6 +221,13 @@ def init_db(engine=None):
         conn.execute(
             text(
                 "SELECT create_hypertable('stock_indicators', 'trade_date', "
+                "chunk_time_interval => INTERVAL '1 month', "
+                "if_not_exists => TRUE)"
+            )
+        )
+        conn.execute(
+            text(
+                "SELECT create_hypertable('block_indicators', 'trade_date', "
                 "chunk_time_interval => INTERVAL '1 month', "
                 "if_not_exists => TRUE)"
             )

@@ -22,7 +22,7 @@ class MarketDataAPI:
                   dividend_type: str = "none") -> pd.DataFrame | None:
         """获取单只股票历史K线数据。
 
-        Returns DataFrame with columns: date, open, high, low, close, volume.
+        Returns DataFrame with columns: date, open, high, low, close, volume, amount.
         """
         try:
             data = self._client.tq.get_market_data(
@@ -31,7 +31,7 @@ class MarketDataAPI:
                 count=count,
                 dividend_type=dividend_type,
                 fill_data=True,
-            )
+        )
             df = pd.DataFrame({
                 "date": data["Open"].iloc[:, 0].index,
                 "open": data["Open"].iloc[:, 0].values,

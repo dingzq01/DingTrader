@@ -6,7 +6,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from src.data.models import StockData, IndicatorsData, get_session
+from src.data.models import StockData, StockIndicators, get_session
 from src.indicators.registry import compute_for_stock
 from src.utils.logging import get_logger
 
@@ -33,7 +33,7 @@ class BaseStrategy(ABC):
         try:
             result = session.execute(
                 text(
-                    "SELECT trade_date, open, high, low, close, volume "
+                    "SELECT trade_date, open, high, low, close, volume, amount "
                     "FROM stock_data WHERE code = :code "
                     "ORDER BY trade_date DESC LIMIT :limit"
                 ),
@@ -45,7 +45,7 @@ class BaseStrategy(ABC):
 
             df = pd.DataFrame(
                 result,
-                columns=["date", "open", "high", "low", "close", "volume"],
+                columns=["date", "open", "high", "low", "close", "volume", "amount"],
             )
             return df.sort_values("date").reset_index(drop=True)
         finally:
@@ -58,12 +58,12 @@ class BaseStrategy(ABC):
 
     def save_indicators(self, stock_code: str, trade_date: date,
                         indicators: dict[str, float], session: Session):
-        """将指标值存入 indicators_data 表 (EAV模式)。"""
+        """将指标值存入 stock_indicators 表 (EAV模式)。"""
         for name, value in indicators.items():
             if value is None:
                 continue
             # Upsert: 有则更新，无则插入
-            existing = session.get(IndicatorsData, {
+            existing = session.get(StockIndicators, {
                 "stock_code": stock_code,
                 "trade_date": trade_date,
                 "indicator_name": name,
@@ -71,7 +71,7 @@ class BaseStrategy(ABC):
             if existing:
                 existing.indicator_value = float(value)
             else:
-                session.add(IndicatorsData(
+                session.add(StockIndicators(
                     stock_code=stock_code,
                     trade_date=trade_date,
                     indicator_name=name,

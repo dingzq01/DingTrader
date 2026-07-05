@@ -84,6 +84,7 @@ def download_stock_kline(
                 low=row["low"],
                 close=row["close"],
                 volume=row["volume"],
+                amount=row["amount"] if "amount" in row.index else 0,
             ))
 
         session.commit()
