@@ -10,10 +10,26 @@ logger = get_logger(__name__)
 
 
 def is_target_market(stock_code: str) -> bool:
-    """是否为主流程同步的 A 股代码。"""
-    if not stock_code or len(stock_code) != 6 or not stock_code.isdigit():
+    """是否为主流程需要同步的 A 股代码。"""
+    if not stock_code:
         return False
-    return stock_code.startswith(("0", "3", "6", "688"))
+
+    code = stock_code.strip()
+
+    # 去掉市场前缀 (e.g., SZ000001 → 000001, SH600000 → 600000)
+    for prefix in ("SZ", "SH", "BJ"):
+        if code.startswith(prefix) and len(code) == 8 and code[2:].isdigit():
+            code = code[2:]
+            break
+
+    # 去掉市场后缀 (e.g., 000001.SZ → 000001)
+    if "." in code:
+        code = code.rsplit(".", 1)[0]
+
+    if len(code) != 6 or not code.isdigit():
+        return False
+
+    return code.startswith(("0", "3", "6", "688"))
 
 
 def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:
