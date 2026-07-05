@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.config.settings import get_settings
-from src.data.models import StockData, get_engine, get_session
+from src.data.models import BlockData, StockData, get_engine, get_session
 from src.tq_bridge.client import TQClient
 from src.tq_bridge.market_data import MarketDataAPI
 from src.utils.logging import get_logger
@@ -149,6 +149,117 @@ def download_stocks_batch(
     logger.info(
         "batch_download_complete",
         total_stocks=len(target_stocks),
+        total_rows=sum(results.values()),
+    )
+    return results
+
+
+def get_existing_block_dates(session: Session, block_code: str) -> set[date]:
+    """查询某个板块在数据库中已有的日期集合。"""
+    result = session.execute(
+        text(
+            "SELECT trade_date FROM block_data WHERE code = :code"
+        ),
+        {"code": block_code},
+    ).fetchall()
+    return {row[0] for row in result}
+
+
+@retry_on_failure(max_retries=3, base_delay=1.0)
+def download_block_kline(
+    client: TQClient,
+    block_code: str,
+    block_name: str | None = None,
+    session: Session | None = None,
+) -> int:
+    """下载单个板块的历史K线并写入 TimescaleDB。
+
+    Returns: 成功写入的K线条数。
+    """
+    api = MarketDataAPI(client)
+    settings = get_settings()
+    lookback_days = settings.sync.lookback_years * 250
+
+    df = api.get_kline(block_code, count=lookback_days)
+    if df is None or df.empty:
+        logger.warning("no_block_kline_data", block_code=block_code)
+        return 0
+
+    close_session = False
+    if session is None:
+        session = get_session()
+        close_session = True
+
+    try:
+        existing_dates = get_existing_block_dates(session, block_code)
+        new_rows = df[~df["date"].isin(existing_dates)]
+
+        if new_rows.empty:
+            return 0
+
+        final_name = block_name if block_name else block_code
+
+        for _, row in new_rows.iterrows():
+            session.add(BlockData(
+                code=block_code,
+                name=final_name,
+                trade_date=row["date"],
+                open=row["open"],
+                high=row["high"],
+                low=row["low"],
+                close=row["close"],
+                volume=row["volume"],
+                amount=row["amount"] if "amount" in row.index else 0,
+            ))
+
+        session.commit()
+        logger.debug("block_kline_downloaded", block_code=block_code,
+                     new_rows=len(new_rows))
+        return len(new_rows)
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if close_session:
+            session.close()
+
+
+def download_blocks_batch(
+    client: TQClient,
+    block_list: list[dict[str, str]] | list[str],
+) -> dict[str, int]:
+    """批量下载板块K线数据。
+
+    Returns: {block_code: new_rows_count} 映射。
+    """
+    settings = get_settings()
+    results = {}
+
+    blocks: list[dict[str, str]]
+    if block_list and isinstance(block_list[0], dict):
+        blocks = block_list
+    else:
+        blocks = [{"block_code": code} for code in block_list]
+
+    for idx, block in enumerate(blocks):
+        block_code = block["block_code"]
+        block_name = block.get("block_name")
+        try:
+            if block_name is None:
+                count = download_block_kline(client, block_code)
+            else:
+                count = download_block_kline(client, block_code, block_name)
+            results[block_code] = count
+        except Exception:
+            logger.exception("download_block_failed", block_code=block_code)
+            results[block_code] = 0
+
+        if idx + 1 < len(blocks):
+            time.sleep(settings.sync.request_interval_seconds)
+
+    logger.info(
+        "batch_block_download_complete",
+        total_blocks=len(blocks),
         total_rows=sum(results.values()),
     )
     return results

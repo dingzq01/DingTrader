@@ -94,3 +94,15 @@ def get_unique_stock_list(sector_df: pd.DataFrame) -> pd.DataFrame:
     return sector_df[["stock_code", "stock_name"]].drop_duplicates(
         subset="stock_code"
     ).reset_index(drop=True)
+
+
+def get_unique_block_list(sector_df: pd.DataFrame) -> pd.DataFrame:
+    """从板块-个股关联DataFrame中提取唯一板块列表。"""
+    if sector_df.empty:
+        return pd.DataFrame(columns=["block_code", "block_name"])
+    # 兼容新旧列名
+    code_key = "block_code" if "block_code" in sector_df.columns else "sector_code"
+    name_key = "block_name" if "block_name" in sector_df.columns else "sector_name"
+    return sector_df[[code_key, name_key]].drop_duplicates(
+        subset=code_key
+    ).rename(columns={code_key: "block_code", name_key: "block_name"}).reset_index(drop=True)

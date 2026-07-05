@@ -1,8 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from src.data.fetcher import fetch_all_sector_stocks, get_unique_stock_list
-from src.data.downloader import download_stocks_batch
+from src.data.fetcher import fetch_all_sector_stocks, get_unique_block_list, get_unique_stock_list
+from src.data.downloader import download_blocks_batch, download_stocks_batch
 from src.data.models import (
     StockBlockRelation,
     get_engine,
@@ -54,7 +54,7 @@ def sync_sector_metadata(session: Session, block_df) -> None:
 
 
 def full_sync(client: TQClient):
-    """完整同步流程：获取板块 → 同步元数据 → 下载所有个股K线。
+    """完整同步流程：获取板块 → 同步元数据 → 下载个股K线 → 下载板块K线。
 
     确保概念板块和行业板块下的所有个股全部纳入拉取范围。
     """
@@ -86,12 +86,25 @@ def full_sync(client: TQClient):
     # 4. 批量下载个股K线
     results = download_stocks_batch(client, stock_records)
 
-    # 5. 完整性校验
-    failed = [k for k, v in results.items() if v == 0]
-    if failed:
-        logger.warning("sync_complete_with_failures", failed_count=len(failed))
+    # 5. 批量下载板块K线
+    block_list = get_unique_block_list(block_df)
+    block_records = block_list.to_dict("records")
+    logger.info("unique_blocks_to_download", count=len(block_records))
+    block_results = download_blocks_batch(client, block_records)
 
-    logger.info("full_sync_completed", success_count=len(stock_records) - len(failed))
+    # 6. 完整性校验
+    stock_failed = [k for k, v in results.items() if v == 0]
+    block_failed = [k for k, v in block_results.items() if v == 0]
+    if stock_failed:
+        logger.warning("stock_sync_failures", failed_count=len(stock_failed))
+    if block_failed:
+        logger.warning("block_sync_failures", failed_count=len(block_failed))
+
+    logger.info(
+        "full_sync_completed",
+        stock_success=len(stock_records) - len(stock_failed),
+        block_success=len(block_records) - len(block_failed),
+    )
 
 
 def check_data_integrity(client: TQClient) -> dict:
