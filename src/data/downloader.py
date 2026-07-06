@@ -66,7 +66,7 @@ def download_stock_kline(
     try:
         # 只插入数据库中不存在的日期
         existing_dates = get_existing_dates(session, stock_code)
-        new_rows = df[~df["date"].isin(existing_dates)]
+        new_rows = df[~df["date"].dt.date.isin(existing_dates)]
 
         if new_rows.empty:
             return 0
@@ -192,7 +192,7 @@ def download_block_kline(
 
     try:
         existing_dates = get_existing_block_dates(session, block_code)
-        new_rows = df[~df["date"].isin(existing_dates)]
+        new_rows = df[~df["date"].dt.date.isin(existing_dates)]
 
         if new_rows.empty:
             return 0
