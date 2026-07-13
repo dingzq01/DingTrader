@@ -49,22 +49,35 @@ def download_stock_kline(
 
     Returns: 成功写入的K线条数。
     """
-    api = MarketDataAPI(client)
     settings = get_settings()
     lookback_days = settings.sync.lookback_years * 250
 
-    df = api.get_kline(stock_code, count=lookback_days)
-    if df is None or df.empty:
-        logger.warning("no_kline_data", stock_code=stock_code)
-        return 0
-
+    # 提前创建 session，用于查询最新日期
     close_session = False
     if session is None:
         session = get_session()
         close_session = True
 
     try:
-        # 只插入数据库中不存在的日期
+        # 根据数据库最新日期动态计算需要请求的K线条数
+        latest_date = get_latest_stock_date(session, stock_code)
+        if latest_date is not None:
+            days_since = (date.today() - latest_date).days
+            if days_since <= 0:
+                logger.debug("stock_already_up_to_date",
+                             stock_code=stock_code, latest_date=latest_date)
+                return 0
+            count = min(int(days_since * 1.5) + 5, lookback_days)
+        else:
+            count = lookback_days
+
+        api = MarketDataAPI(client)
+        df = api.get_kline(stock_code, count=count)
+        if df is None or df.empty:
+            logger.warning("no_kline_data", stock_code=stock_code)
+            return 0
+
+        # 去重过滤：排除数据库中已存在的日期
         existing_dates = get_existing_dates(session, stock_code)
         new_rows = df[~df["date"].dt.date.isin(existing_dates)]
 
@@ -89,7 +102,7 @@ def download_stock_kline(
 
         session.commit()
         logger.debug("kline_downloaded", stock_code=stock_code,
-                     new_rows=len(new_rows))
+                     new_rows=len(new_rows), count_requested=count)
         return len(new_rows)
     except Exception:
         session.rollback()
@@ -97,6 +110,15 @@ def download_stock_kline(
     finally:
         if close_session:
             session.close()
+
+
+def get_latest_stock_date(session: Session, stock_code: str) -> date | None:
+    """查询某只股票在数据库中的最新交易日期。"""
+    result = session.execute(
+        text("SELECT MAX(trade_date) FROM stock_data WHERE code = :code"),
+        {"code": stock_code},
+    ).scalar()
+    return result
 
 
 def get_existing_dates(session: Session, stock_code: str) -> set[date]:
@@ -154,6 +176,15 @@ def download_stocks_batch(
     return results
 
 
+def get_latest_block_date(session: Session, block_code: str) -> date | None:
+    """查询某个板块在数据库中的最新交易日期。"""
+    result = session.execute(
+        text("SELECT MAX(trade_date) FROM block_data WHERE code = :code"),
+        {"code": block_code},
+    ).scalar()
+    return result
+
+
 def get_existing_block_dates(session: Session, block_code: str) -> set[date]:
     """查询某个板块在数据库中已有的日期集合。"""
     result = session.execute(
@@ -176,21 +207,35 @@ def download_block_kline(
 
     Returns: 成功写入的K线条数。
     """
-    api = MarketDataAPI(client)
     settings = get_settings()
     lookback_days = settings.sync.lookback_years * 250
 
-    df = api.get_kline(block_code, count=lookback_days)
-    if df is None or df.empty:
-        logger.warning("no_block_kline_data", block_code=block_code)
-        return 0
-
+    # 提前创建 session，用于查询最新日期
     close_session = False
     if session is None:
         session = get_session()
         close_session = True
 
     try:
+        # 根据数据库最新日期动态计算需要请求的K线条数
+        latest_date = get_latest_block_date(session, block_code)
+        if latest_date is not None:
+            days_since = (date.today() - latest_date).days
+            if days_since <= 0:
+                logger.debug("block_already_up_to_date",
+                             block_code=block_code, latest_date=latest_date)
+                return 0
+            count = min(int(days_since * 1.5) + 5, lookback_days)
+        else:
+            count = lookback_days
+
+        api = MarketDataAPI(client)
+        df = api.get_kline(block_code, count=count)
+        if df is None or df.empty:
+            logger.warning("no_block_kline_data", block_code=block_code)
+            return 0
+
+        # 去重过滤：排除数据库中已存在的日期
         existing_dates = get_existing_block_dates(session, block_code)
         new_rows = df[~df["date"].dt.date.isin(existing_dates)]
 
@@ -214,7 +259,7 @@ def download_block_kline(
 
         session.commit()
         logger.debug("block_kline_downloaded", block_code=block_code,
-                     new_rows=len(new_rows))
+                     new_rows=len(new_rows), count_requested=count)
         return len(new_rows)
     except Exception:
         session.rollback()
