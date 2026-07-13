@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
     "structlog>=23.0",
+    "tqdm>=4.66",
     "backtrader>=1.9",
     "plotly>=5.0",
 ]

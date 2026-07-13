@@ -4,6 +4,7 @@ import time
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from tqdm import tqdm
 
 from src.config.settings import get_settings
 from src.data.models import BlockData, StockData, get_engine, get_session
@@ -152,7 +153,7 @@ def download_stocks_batch(
 
     target_stocks = [row for row in stocks if is_target_market(row["stock_code"])]
 
-    for idx, stock in enumerate(target_stocks):
+    for stock in tqdm(target_stocks, desc="下载个股K线", unit="只"):
         stock_code = stock["stock_code"]
         stock_name = stock.get("stock_name")
         try:
@@ -165,8 +166,7 @@ def download_stocks_batch(
             logger.exception("download_stock_failed", stock_code=stock_code)
             results[stock_code] = 0
 
-        if idx + 1 < len(target_stocks):
-            time.sleep(settings.sync.request_interval_seconds)
+        time.sleep(settings.sync.request_interval_seconds)
 
     logger.info(
         "batch_download_complete",
@@ -286,7 +286,7 @@ def download_blocks_batch(
     else:
         blocks = [{"block_code": code} for code in block_list]
 
-    for idx, block in enumerate(blocks):
+    for block in tqdm(blocks, desc="下载板块K线", unit="个"):
         block_code = block["block_code"]
         block_name = block.get("block_name")
         try:
@@ -299,8 +299,7 @@ def download_blocks_batch(
             logger.exception("download_block_failed", block_code=block_code)
             results[block_code] = 0
 
-        if idx + 1 < len(blocks):
-            time.sleep(settings.sync.request_interval_seconds)
+        time.sleep(settings.sync.request_interval_seconds)
 
     logger.info(
         "batch_block_download_complete",
