@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from src.config.settings import get_settings
+from src.dashboard.views import init_dashboard_views
 
 
 class Base(DeclarativeBase):
@@ -232,4 +233,6 @@ def init_db(engine=None):
                 "if_not_exists => TRUE)"
             )
         )
+        # 创建 Grafana 看板函数 (dashboard.block_daily)
+        init_dashboard_views(conn)
         conn.commit()
