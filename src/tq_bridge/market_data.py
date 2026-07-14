@@ -19,8 +19,8 @@ class MarketDataAPI:
         self._settings = get_settings()
 
     def get_kline(self, stock_code: str, period: str = "1d", count: int = 250,
-                  dividend_type: str = "none") -> pd.DataFrame | None:
-        """获取单只股票历史K线数据。
+                  dividend_type: str = "front") -> pd.DataFrame | None:
+        """获取单只股票历史K线数据（前复权）。
 
         Returns DataFrame with columns: date, open, high, low, close, volume, amount.
         """
