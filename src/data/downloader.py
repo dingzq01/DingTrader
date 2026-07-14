@@ -98,7 +98,7 @@ def download_stock_kline(
                 low=row["low"],
                 close=row["close"],
                 volume=row["volume"],
-                amount=row["amount"] if "amount" in row.index else 0,
+                amount=row["amount"] if pd.notna(row["amount"]) else 0,
             ))
 
         session.commit()
@@ -254,7 +254,7 @@ def download_block_kline(
                 low=row["low"],
                 close=row["close"],
                 volume=row["volume"],
-                amount=row["amount"] if "amount" in row.index else 0,
+                amount=row["amount"] if pd.notna(row["amount"]) else 0,
             ))
 
         session.commit()
