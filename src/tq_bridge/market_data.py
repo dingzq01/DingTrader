@@ -39,6 +39,7 @@ class MarketDataAPI:
                 "low": data["Low"].iloc[:, 0].values,
                 "close": data["Close"].iloc[:, 0].values,
                 "volume": data["Volume"].iloc[:, 0].values,
+                "amount": data["Amount"].iloc[:, 0].values,
             })
             if df.empty:
                 return None
@@ -58,6 +59,7 @@ class MarketDataAPI:
                     "low": float(snapshot["Min"]),
                     "high": float(snapshot["Max"]),
                     "volume": int(snapshot["Volume"]),
+                    "amount": int(snapshot["Amount"]),
                 }
         except Exception as e:
             logger.error("get_snapshot_failed", stock_code=stock_code, error=str(e))
