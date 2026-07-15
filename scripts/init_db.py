@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Initialize database: create tables, hypertable, and materialized views.
+"""Initialize database: create tables, hypertable, and views.
 
 用法:
     python scripts/init_db.py
@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import text
 
 from src.data.models import init_db, get_engine
+from src.dashboard import refresh_block_daily_stats
 from src.utils.logging import setup_logging, get_logger
 
 logger = get_logger(__name__)
@@ -44,19 +45,17 @@ def main():
     init_db(engine)
     logger.info("tables_and_hypertable_created")
 
-    # 2. Create materialized views from continuous_aggregates.sql
+    # 2. Create views from continuous_aggregates.sql
     sql_path = (
         Path(__file__).resolve().parent.parent
         / "src" / "data" / "continuous_aggregates.sql"
     )
     _run_sql_file(engine, str(sql_path))
-    logger.info("materialized_views_created")
+    logger.info("views_created")
 
-    # 3. Refresh materialized views (initial population)
-    with engine.connect() as conn:
-        conn.execute(text("REFRESH MATERIALIZED VIEW block_daily_stats"))
-        conn.commit()
-    logger.info("materialized_views_refreshed")
+    # 3. Dashboard 聚合表初始填充
+    refresh_block_daily_stats(engine, exclude_filter="")
+    logger.info("dashboard_refreshed")
 
     logger.info("init_db_completed")
 

@@ -11,14 +11,23 @@ def test_refactor_models_exist_in_metadata():
     assert BlockIndicators.__tablename__ in model_names
 
 
-def test_continuous_aggregates_uses_new_table_names_and_indexes():
+def test_continuous_aggregates_uses_block_daily_stats_table():
     sql = Path("src/data/continuous_aggregates.sql").read_text(encoding="utf-8")
 
-    assert "stock_block_relation" in sql
-    assert "stock_indicators" in sql
-    assert "block_indicators" in sql
-    assert "block_daily_stats" in sql
+    assert "dashboard.block_daily_stats" in sql
+    assert "CREATE OR REPLACE VIEW block_mainline_view" in sql
+    assert "CREATE MATERIALIZED VIEW" not in sql
     assert "sector_daily_stats" not in sql
+
+
+def test_dashboard_block_daily_stats_is_table_not_function():
+    sql = Path("src/dashboard/views.py").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS dashboard.block_daily_stats" in sql
+    assert "DROP FUNCTION IF EXISTS dashboard.block_daily(text)" in sql
+    assert "INSERT INTO dashboard.block_daily_stats" in sql
+    assert "ON CONFLICT (block_code, trade_date, exclude_filter) DO UPDATE" in sql
+    assert "exclude_filter" in sql
 
 
 def test_stock_data_name_is_not_nullable():

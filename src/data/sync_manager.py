@@ -9,6 +9,7 @@ from src.data.models import (
     get_session,
     init_db,
 )
+from src.dashboard import refresh_block_daily_stats
 from src.tq_bridge.client import TQClient
 from src.utils.logging import get_logger
 
@@ -99,6 +100,9 @@ def full_sync(client: TQClient):
         logger.warning("stock_sync_failures", failed_count=len(stock_failed))
     if block_failed:
         logger.warning("block_sync_failures", failed_count=len(block_failed))
+
+    # 7. 刷新 dashboard 聚合表（自动补全到最新日期）
+    refresh_block_daily_stats(engine, exclude_filter="")
 
     logger.info(
         "full_sync_completed",

@@ -233,6 +233,6 @@ def init_db(engine=None):
                 "if_not_exists => TRUE)"
             )
         )
-        # 创建 Grafana 看板函数 (dashboard.block_daily)
+        # 创建 Grafana 看板表 (dashboard.block_daily_stats)
         init_dashboard_views(conn)
         conn.commit()
