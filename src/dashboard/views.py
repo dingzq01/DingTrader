@@ -86,8 +86,8 @@ block_metrics AS (
         COUNT(DISTINCT swb.code) FILTER (WHERE swb.close < swb.prev_close) AS down_count,
         COUNT(DISTINCT swb.code) FILTER (WHERE swb.close = swb.prev_close) AS flat_count,
         ROUND(
-            SUM((swb.close - swb.prev_close) / swb.prev_close * 100 * swb.amount)
-            / NULLIF(SUM(swb.amount), 0)::numeric,
+            (SUM((swb.close - swb.prev_close) / swb.prev_close * 100 * swb.amount)
+            / NULLIF(SUM(swb.amount), 0))::numeric,
             2
         ) AS change_pct,
         ROUND(
@@ -99,7 +99,7 @@ block_metrics AS (
             WHERE (swb.close - swb.prev_close) / swb.prev_close >= 0.099
         ) AS limit_up_count,
         ROUND(
-            SUM(swb.volume) / NULLIF(SUM(swb.prev_volume), 0)::numeric,
+            (SUM(swb.volume) / NULLIF(SUM(swb.prev_volume), 0))::numeric,
             2
         ) AS volume_ratio,
         ROUND(SUM(swb.amount)::numeric, 2) AS total_amount,
