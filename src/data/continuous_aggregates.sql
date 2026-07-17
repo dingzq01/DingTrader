@@ -1,7 +1,7 @@
 -- ============================================================
 -- TimescaleDB 板块日级别视图
 -- ------------------------------------------------------------
--- block_daily_stats 已改为实体表（由 src/dashboard/views.py 管理），
+-- block_stat_daily 由 src/data/block_stat.py 管理，
 -- 本文件只保留基于该表的视图。
 
 -- 板块主线趋势视图
@@ -15,18 +15,17 @@ WITH sector_ranked AS (
         stock_count,
         up_count,
         down_count,
-        change_pct AS weighted_pct_change,
+        avg_change_pct AS weighted_pct_change,
         up_ratio AS up_down_ratio,
         limit_up_count,
-        total_amount,
+        amount AS total_amount,
         RANK() OVER (
-            PARTITION BY trade_date ORDER BY change_pct DESC
+            PARTITION BY trade_date ORDER BY avg_change_pct DESC
         ) AS daily_rank,
         RANK() OVER (
-            PARTITION BY trade_date ORDER BY total_amount DESC
+            PARTITION BY trade_date ORDER BY amount DESC
         ) AS volume_rank
-    FROM dashboard.block_daily_stats
-    WHERE exclude_filter = ''
+    FROM block_stat_daily
 ),
 sector_momentum AS (
     SELECT

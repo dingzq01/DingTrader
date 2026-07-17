@@ -65,6 +65,37 @@ class MarketDataAPI:
             logger.error("get_snapshot_failed", stock_code=stock_code, error=str(e))
         return None
 
+    def get_stock_info(self, stock_code: str) -> dict[str, Any] | None:
+        """获取股票基本信息（ST 标记、流通股本等）。
+
+        Returns dict with: IsSTGP (int, 1=ST), ActiveCapital (float, 流通股本).
+        """
+        try:
+            info = self._client.tq.get_stock_info(stock_code)
+            if info is None:
+                return None
+            return {
+                "IsSTGP": int(info.get("IsSTGP", 0)),
+                "ActiveCapital": float(info.get("ActiveCapital", 0)),
+            }
+        except Exception as e:
+            logger.error("get_stock_info_failed", stock_code=stock_code, error=str(e))
+            return None
+
+    def get_gb_info(self, stock_code: str) -> dict[str, Any] | None:
+        """获取股票股本信息。
+
+        Returns dict with total equity, float equity, etc.
+        """
+        try:
+            info = self._client.tq.get_gb_info(stock_code)
+            if info is None:
+                return None
+            return dict(info)
+        except Exception as e:
+            logger.error("get_gb_info_failed", stock_code=stock_code, error=str(e))
+            return None
+
     def batch_get_snapshots(self, stocks: list[str]) -> dict[str, dict]:
         """批量获取实时行情快照，带限流控制。"""
         all_data: dict[str, dict] = {}

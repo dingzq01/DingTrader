@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import text
 
 from src.data.models import init_db, get_engine
-from src.dashboard import refresh_block_daily_stats
+from src.data.block_stat import compute_block_stat_daily
 from src.utils.logging import setup_logging, get_logger
 
 logger = get_logger(__name__)
@@ -53,9 +53,9 @@ def main():
     _run_sql_file(engine, str(sql_path))
     logger.info("views_created")
 
-    # 3. Dashboard 聚合表初始填充
-    refresh_block_daily_stats(engine, exclude_filter="")
-    logger.info("dashboard_refreshed")
+    # 3. 板块统计表初始填充
+    compute_block_stat_daily(engine)
+    logger.info("block_stat_refreshed")
 
     logger.info("init_db_completed")
 

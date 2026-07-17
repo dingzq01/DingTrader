@@ -9,7 +9,7 @@ from src.data.models import (
     get_session,
     init_db,
 )
-from src.dashboard import refresh_block_daily_stats
+from src.data.block_stat import compute_block_stat_daily
 from src.tq_bridge.client import TQClient
 from src.utils.logging import get_logger
 
@@ -101,8 +101,8 @@ def full_sync(client: TQClient):
     if block_failed:
         logger.warning("block_sync_failures", failed_count=len(block_failed))
 
-    # 7. 刷新 dashboard 聚合表（自动补全到最新日期）
-    refresh_block_daily_stats(engine, exclude_filter="")
+    # 7. 刷新板块统计表（自动补全到最新日期）
+    compute_block_stat_daily(engine)
 
     logger.info(
         "full_sync_completed",
@@ -111,45 +111,3 @@ def full_sync(client: TQClient):
     )
 
 
-def check_data_integrity(client: TQClient) -> dict:
-    """数据完整性校验：对比 TQ 板块个股数与数据库实际拉取数。
-
-    Returns: {block_name: {expected, actual_in_db, missing_count}} 字典。
-    """
-    # 0. 确保数据库表存在
-    init_db()
-
-    # 1. 获取最新板块个股关系
-    block_df = fetch_all_sector_stocks(client)
-    if block_df.empty:
-        return {}
-
-    code_key, name_key, _ = _resolve_block_columns(block_df)
-
-    session = get_session()
-    integrity_report = {}
-
-    try:
-        for block_code, group in block_df.groupby(code_key):
-            expected_stocks = set(group["stock_code"].unique())
-            block_name = group.iloc[0][name_key]
-
-            db_rows = session.execute(
-                text(
-                    "SELECT stock_code FROM stock_block_relation WHERE block_code = :block_code"
-                ),
-                {"block_code": block_code},
-            ).fetchall()
-            db_stocks = {row[0] for row in db_rows}
-
-            missing = expected_stocks - db_stocks
-
-            integrity_report[block_name] = {
-                "expected": len(expected_stocks),
-                "actual_in_db": len(expected_stocks & db_stocks),
-                "missing_count": len(missing),
-            }
-    finally:
-        session.close()
-
-    return integrity_report

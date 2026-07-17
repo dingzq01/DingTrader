@@ -36,7 +36,7 @@ def is_target_market(stock_code: str) -> bool:
     if len(code) != 6 or not code.isdigit():
         return False
 
-    return code.startswith(("0", "3", "6", "688"))
+    return code.startswith("0") or (code.startswith("6") and not code.startswith("688"))
 
 
 @retry_on_failure(max_retries=3, base_delay=1.0)
@@ -48,7 +48,7 @@ def download_stock_kline(
 ) -> int:
     """下载单只股票的历史K线并写入 TimescaleDB。
 
-    Returns: 成功写入的K线条数。
+    Returns: 成功写入的K线条数（0 表示跳过或无新数据）。
     """
     settings = get_settings()
     lookback_days = settings.sync.lookback_years * 250
@@ -60,6 +60,14 @@ def download_stock_kline(
         close_session = True
 
     try:
+        api = MarketDataAPI(client)
+
+        # 获取股票信息：ST 标记和流通股本
+        stock_info = api.get_stock_info(stock_code)
+        if stock_info and stock_info.get("IsSTGP") == 1:
+            logger.debug("stock_is_st_skipping", stock_code=stock_code)
+            return 0
+
         # 根据数据库最新日期动态计算需要请求的K线条数
         latest_date = get_latest_stock_date(session, stock_code)
         if latest_date is not None:
@@ -72,11 +80,28 @@ def download_stock_kline(
         else:
             count = lookback_days
 
-        api = MarketDataAPI(client)
         df = api.get_kline(stock_code, count=count)
         if df is None or df.empty:
             logger.warning("no_kline_data", stock_code=stock_code)
             return 0
+
+        # 按日期排序
+        df = df.sort_values("date").reset_index(drop=True)
+
+        # 计算 change_pct = (close - prev_close) / prev_close * 100
+        df["prev_close"] = df["close"].shift(1)
+        df["change_pct"] = (
+            (df["close"] - df["prev_close"]) / df["prev_close"] * 100
+        )
+        mask = df["prev_close"].isna() | (df["prev_close"] <= 0)
+        df.loc[mask, "change_pct"] = None
+
+        # 计算 turnover = volume / ActiveCapital * 100
+        active_capital = stock_info.get("ActiveCapital") if stock_info else 0
+        if active_capital and active_capital > 0:
+            df["turnover"] = df["volume"] / active_capital * 100
+        else:
+            df["turnover"] = None
 
         # 去重过滤：排除数据库中已存在的日期
         existing_dates = get_existing_dates(session, stock_code)
@@ -99,6 +124,8 @@ def download_stock_kline(
                 close=row["close"],
                 volume=row["volume"],
                 amount=row["amount"] if pd.notna(row["amount"]) else 0,
+                change_pct=row["change_pct"] if pd.notna(row["change_pct"]) else None,
+                turnover=row["turnover"] if pd.notna(row["turnover"]) else None,
             ))
 
         session.commit()

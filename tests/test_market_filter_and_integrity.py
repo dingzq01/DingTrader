@@ -73,9 +73,11 @@ class _FakeSession:
 def test_is_target_market_accepts_a_share_prefixes():
     assert downloader.is_target_market("000001")
     assert downloader.is_target_market("002000")
-    assert downloader.is_target_market("300001")
     assert downloader.is_target_market("600000")
-    assert downloader.is_target_market("688001")
+
+    # 创业板/科创板不再纳入
+    assert not downloader.is_target_market("300001")
+    assert not downloader.is_target_market("688001")
 
 
 def test_is_target_market_rejects_non_a_share_codes():
@@ -115,11 +117,9 @@ def test_download_stocks_batch_skips_non_target_markets_and_throttles(monkeypatc
     assert result == {
         "600000": 1,
         "000001": 1,
-        "300001": 1,
-        "688001": 1,
     }
-    assert called == ["600000", "000001", "300001", "688001"]
-    assert sleeps == [1.5, 1.5, 1.5]
+    assert called == ["600000", "000001"]
+    assert sleeps == [1.5, 1.5]
 
 
 def test_sync_sector_metadata_uses_stock_block_relation(monkeypatch):
@@ -152,58 +152,3 @@ def test_sync_sector_metadata_uses_stock_block_relation(monkeypatch):
     assert any("stock_block_relation" in sql for sql, _ in session.executed)
 
 
-def test_check_data_integrity_matches_relation_to_downloaded_data(monkeypatch):
-    def _fake_fetch_all_sector_stocks(_client):
-        return pd.DataFrame([
-            {
-                "sector_name": "科创",
-                "sector_code": "BK_A",
-                "sector_type": "industry",
-                "stock_code": "000001",
-                "stock_name": "AAA",
-            },
-            {
-                "sector_name": "科创",
-                "sector_code": "BK_A",
-                "sector_type": "industry",
-                "stock_code": "600000",
-                "stock_name": "BBB",
-            },
-            {
-                "sector_name": "科创",
-                "sector_code": "BK_A",
-                "sector_type": "industry",
-                "stock_code": "700000",
-                "stock_name": "CCC",
-            },
-            {
-                "sector_name": "央企",
-                "sector_code": "BK_B",
-                "sector_type": "concept",
-                "stock_code": "688001",
-                "stock_name": "DDD",
-            },
-        ])
-
-    session = _FakeSession(block_query_map={"BK_A": ["000001"], "BK_B": []})
-
-    monkeypatch.setattr(sync_manager, "fetch_all_sector_stocks", _fake_fetch_all_sector_stocks)
-    monkeypatch.setattr(sync_manager, "init_db", lambda: None)
-    monkeypatch.setattr(sync_manager, "get_session", lambda: session)
-
-    report = sync_manager.check_data_integrity(None)
-
-    assert report == {
-        "科创": {
-            "expected": 3,
-            "actual_in_db": 1,
-            "missing_count": 2,
-        },
-        "央企": {
-            "expected": 1,
-            "actual_in_db": 0,
-            "missing_count": 1,
-        },
-    }
-    assert any("stock_block_relation" in sql for sql, _ in session.executed)
-    assert session.closed

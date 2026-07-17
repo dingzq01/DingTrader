@@ -29,7 +29,7 @@ def is_target_market(stock_code: str) -> bool:
     if len(code) != 6 or not code.isdigit():
         return False
 
-    return code.startswith(("0", "3", "6", "688"))
+    return code.startswith("0") or (code.startswith("6") and not code.startswith("688"))
 
 
 def fetch_all_sector_stocks(client: TQClient) -> pd.DataFrame:

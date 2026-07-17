@@ -1,3 +1,1 @@
-from src.dashboard.views import init_dashboard_views, refresh_block_daily_stats
-
-__all__ = ["init_dashboard_views", "refresh_block_daily_stats"]
+"""块统计已迁移到 src/data/block_stat.py，dashboard 模块仅保留旧表清理。"""

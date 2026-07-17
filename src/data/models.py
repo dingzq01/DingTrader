@@ -14,7 +14,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from src.config.settings import get_settings
-from src.dashboard.views import init_dashboard_views
 
 
 class Base(DeclarativeBase):
@@ -53,6 +52,8 @@ class StockData(Base):
     close = Column(Float)
     volume = Column(Float)
     amount = Column(Float)
+    change_pct = Column(Float)
+    turnover = Column(Float)
 
 
 class BlockData(Base):
@@ -93,6 +94,50 @@ class BlockIndicators(Base):
     indicator_name = Column(String(50), primary_key=True)
     indicator_value = Column(Float)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class BlockStatDaily(Base):
+    """板块每日统计事实表 (TimescaleDB hypertable)。
+
+    保存客观统计数据（Fact），不保存评分/策略结果。
+    market/industry/concept 三类板块统一口径：仅统计沪深主板A股。
+    """
+
+    __tablename__ = "block_stat_daily"
+
+    trade_date = Column(Date, primary_key=True)
+    block_code = Column(String(32), primary_key=True)
+    block_name = Column(String(100), nullable=False)
+    block_type = Column(String(20), nullable=False)
+
+    # 成分股
+    stock_count = Column(Integer, nullable=False)
+    active_stock_count = Column(Integer, nullable=False)
+
+    # 涨跌统计
+    avg_change_pct = Column(Float)
+    median_change_pct = Column(Float)
+    max_change_pct = Column(Float)
+    min_change_pct = Column(Float)
+    std_change_pct = Column(Float)
+    up_count = Column(Integer)
+    down_count = Column(Integer)
+    flat_count = Column(Integer)
+    up_ratio = Column(Float)
+    down_ratio = Column(Float)
+
+    # 极端行情
+    limit_up_count = Column(Integer)
+    limit_down_count = Column(Integer)
+    gt_5_count = Column(Integer)
+    lt_minus_5_count = Column(Integer)
+
+    # 成交统计
+    volume = Column(Float)
+    amount = Column(Float)
+    avg_turnover = Column(Float)
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 def get_engine(dsn: str | None = None):
@@ -194,8 +239,19 @@ def init_db(engine=None):
         _drop_legacy_sector_tables(conn)
         _migrate_legacy_indicator_tables(conn)
 
+        # 清理旧 dashboard schema（已由 block_stat_daily 替代）
+        conn.execute(text("DROP TABLE IF EXISTS dashboard.block_daily_stats CASCADE"))
+        conn.execute(text("DROP SCHEMA IF EXISTS dashboard CASCADE"))
+
         # 旧表被 DROP 后，重新创建新 EAV 表
         Base.metadata.create_all(eng)
+
+        if _table_exists(conn, "stock_data"):
+            for col_name in ("change_pct", "turnover"):
+                if not _column_exists(conn, "stock_data", col_name):
+                    conn.execute(text(
+                        f"ALTER TABLE stock_data ADD COLUMN {col_name} FLOAT"
+                    ))
 
         if _table_exists(conn, "stock_block_relation"):
             _fill_stock_name_from_relation(conn)
@@ -233,6 +289,21 @@ def init_db(engine=None):
                 "if_not_exists => TRUE)"
             )
         )
-        # 创建 Grafana 看板表 (dashboard.block_daily_stats)
-        init_dashboard_views(conn)
+        conn.execute(
+            text(
+                "SELECT create_hypertable('block_stat_daily', 'trade_date', "
+                "chunk_time_interval => INTERVAL '1 month', "
+                "if_not_exists => TRUE)"
+            )
+        )
+        # 建立 block_stat_daily 索引
+        for idx_col, idx_name in [
+            ("trade_date", "idx_block_stat_date"),
+            ("block_type", "idx_block_stat_type"),
+            ("block_code", "idx_block_stat_code"),
+        ]:
+            conn.execute(text(
+                f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                f"ON block_stat_daily ({idx_col})"
+            ))
         conn.commit()
