@@ -140,6 +140,67 @@ class BlockStatDaily(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class StockIndicatorDaily(Base):
+    """个股每日技术指标表 (TimescaleDB hypertable)。
+
+    Indicator Layer — 仅保存根据历史K线计算得到的连续值技术指标。
+    不保存状态(True/False)、评分(Score)、策略逻辑、买卖信号。
+    数据来源：stock_data。
+    """
+
+    __tablename__ = "stock_indicator_daily"
+
+    trade_date = Column(Date, primary_key=True)
+    stock_code = Column(String(16), primary_key=True)
+
+    # 成交量均线
+    volume_ma5 = Column(Float)
+    volume_ma10 = Column(Float)
+    volume_ma20 = Column(Float)
+
+    # MA
+    ma5 = Column(Float)
+    ma10 = Column(Float)
+    ma20 = Column(Float)
+    ma30 = Column(Float)
+    ma60 = Column(Float)
+    ma120 = Column(Float)
+    ma250 = Column(Float)
+
+    # EMA
+    ema5 = Column(Float)
+    ema10 = Column(Float)
+    ema20 = Column(Float)
+    ema30 = Column(Float)
+    ema60 = Column(Float)
+    ema120 = Column(Float)
+    ema250 = Column(Float)
+
+    # MACD(21,55,13)
+    macd_dif = Column(Float)
+    macd_dea = Column(Float)
+    macd_hist = Column(Float)
+
+    # OBV(20)
+    obv = Column(Float)
+    obv_ma20 = Column(Float)
+
+    # KDJ(21,5,5)
+    k_value = Column(Float)
+    d_value = Column(Float)
+    j_value = Column(Float)
+
+    # 主力做多做空资金线
+    capital_fast = Column(Float)
+    capital_slow = Column(Float)
+
+    # 个股资金生命线
+    capital_life = Column(Float)
+    capital_life_ma = Column(Float)
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 def get_engine(dsn: str | None = None):
     settings = get_settings()
     url = dsn or settings.database.dsn
@@ -305,5 +366,23 @@ def init_db(engine=None):
             conn.execute(text(
                 f"CREATE INDEX IF NOT EXISTS {idx_name} "
                 f"ON block_stat_daily ({idx_col})"
+            ))
+
+        # stock_indicator_daily hypertable
+        conn.execute(
+            text(
+                "SELECT create_hypertable('stock_indicator_daily', 'trade_date', "
+                "chunk_time_interval => INTERVAL '1 month', "
+                "if_not_exists => TRUE)"
+            )
+        )
+        # 建立 stock_indicator_daily 索引
+        for idx_col, idx_name in [
+            ("trade_date", "idx_indicator_date"),
+            ("stock_code", "idx_indicator_code"),
+        ]:
+            conn.execute(text(
+                f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                f"ON stock_indicator_daily ({idx_col})"
             ))
         conn.commit()
