@@ -195,17 +195,27 @@ def _compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     result["capital_fast"] = _tdx_ema(b, 5)
     result["capital_slow"] = _tdx_ema(result["capital_fast"], 26)
 
-    # ---- 个股资金生命线 ----
-    # capital_line = MA(CLOSE,1) / MA(REF(CLOSE,18),18) × 100
-    # MA(CLOSE,1) = CLOSE
-    ref18 = _tdx_ref(close, 18)
-    ma_ref = _tdx_ma(ref18, 18)
-    capital_line = pd.Series(np.nan, index=close.index)
-    valid_cl = ma_ref > 0
-    capital_line[valid_cl] = close[valid_cl] / ma_ref[valid_cl] * 100
+    # ---- 个股资金线 / 资金生命线 ----
+    # 个股资金线 = MA(CLOSE,1) / MA(REF(CLOSE,18),18) × 100
+    # 资金生命线 = MA(FORCAST(个股资金线,20),6)
 
-    result["capital_life"] = _tdx_forcast(capital_line, 20)
-    result["capital_life_ma"] = _tdx_ma(result["capital_life"], 6)
+    # REF(CLOSE,18)
+    ref18 = _tdx_ref(close, 18)
+
+    # MA(REF(CLOSE,18),18)
+    ma_ref = _tdx_ma(ref18, 18)
+
+    # 个股资金线（对应数据库字段：capital_life）
+    capital_line = pd.Series(np.nan, index=close.index)
+    valid = ma_ref > 0
+    capital_line[valid] = close[valid] / ma_ref[valid] * 100
+    result["capital_life"] = capital_line
+
+    # FORCAST(个股资金线,20)
+    capital_line_forecast = _tdx_forcast(capital_line, 20)
+
+    # 资金生命线（对应数据库字段：capital_life_ma）
+    result["capital_life_ma"] = _tdx_ma(capital_line_forecast, 6)
 
     return result
 
