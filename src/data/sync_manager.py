@@ -11,6 +11,7 @@ from src.data.models import (
 )
 from src.data.block_stat import compute_block_stat_daily
 from src.data.stock_indicator import compute_stock_indicator_daily
+from src.data.stock_state import compute_stock_state_daily
 from src.tq_bridge.client import TQClient
 from src.utils.logging import get_logger
 
@@ -107,6 +108,9 @@ def full_sync(client: TQClient):
 
     # 8. 刷新个股技术指标表（自动补全到最新日期）
     compute_stock_indicator_daily(engine)
+
+    # 9. 刷新个股技术状态表（自动补全到最新日期）
+    compute_stock_state_daily(engine)
 
     logger.info(
         "full_sync_completed",

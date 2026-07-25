@@ -1,6 +1,7 @@
 import datetime
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -201,6 +202,69 @@ class StockIndicatorDaily(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class StockStateDaily(Base):
+    """个股每日技术状态表 (TimescaleDB hypertable)。
+
+    State Layer — 将 stock_indicator_daily 的连续值转换为离散布尔状态。
+    不保存评分、不保存策略逻辑、不保存指标原始值。
+    数据来源：stock_indicator_daily + stock_data（仅 close/volume/change_pct）。
+    """
+
+    __tablename__ = "stock_state_daily"
+
+    trade_date = Column(Date, primary_key=True)
+    stock_code = Column(String(16), primary_key=True)
+
+    # 趋势状态
+    price_above_ma5 = Column(Boolean)
+    price_above_ma20 = Column(Boolean)
+    price_above_ma60 = Column(Boolean)
+    ma5_above_ma20 = Column(Boolean)
+    ma20_above_ma60 = Column(Boolean)
+    trend_short_bull = Column(Boolean)
+    trend_mid_bull = Column(Boolean)
+
+    # MACD 状态
+    macd_bullish = Column(Boolean)
+    macd_golden_cross = Column(Boolean)
+    macd_dead_cross = Column(Boolean)
+    macd_hist_positive = Column(Boolean)
+    macd_hist_increasing = Column(Boolean)
+
+    # KDJ 状态
+    kdj_golden_cross = Column(Boolean)
+    kdj_over_buy = Column(Boolean)
+    kdj_over_sell = Column(Boolean)
+
+    # 成交量状态
+    volume_expand = Column(Boolean)
+    volume_shrink = Column(Boolean)
+    price_volume_confirm = Column(Boolean)
+
+    # OBV 资金状态
+    obv_above_ma20 = Column(Boolean)
+    obv_rising = Column(Boolean)
+    obv_price_divergence = Column(Boolean)
+
+    # 主力资金状态
+    capital_bullish = Column(Boolean)
+    capital_cross_up = Column(Boolean)
+    capital_life_up = Column(Boolean)
+
+    # 突破状态
+    high_break_20 = Column(Boolean)
+    high_break_60 = Column(Boolean)
+    new_high = Column(Boolean)
+
+    # 风险状态
+    extreme_up = Column(Boolean)
+    extreme_down = Column(Boolean)
+    high_volatility = Column(Boolean)
+
+    state_version = Column(String(20), default="v1.0")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 def get_engine(dsn: str | None = None):
     settings = get_settings()
     url = dsn or settings.database.dsn
@@ -384,5 +448,23 @@ def init_db(engine=None):
             conn.execute(text(
                 f"CREATE INDEX IF NOT EXISTS {idx_name} "
                 f"ON stock_indicator_daily ({idx_col})"
+            ))
+
+        # stock_state_daily hypertable
+        conn.execute(
+            text(
+                "SELECT create_hypertable('stock_state_daily', 'trade_date', "
+                "chunk_time_interval => INTERVAL '1 month', "
+                "if_not_exists => TRUE)"
+            )
+        )
+        # 建立 stock_state_daily 索引
+        for idx_col, idx_name in [
+            ("trade_date", "idx_state_date"),
+            ("stock_code", "idx_state_code"),
+        ]:
+            conn.execute(text(
+                f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                f"ON stock_state_daily ({idx_col})"
             ))
         conn.commit()

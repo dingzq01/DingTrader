@@ -15,6 +15,7 @@ from sqlalchemy import text
 from src.data.models import init_db, get_engine
 from src.data.block_stat import compute_block_stat_daily
 from src.data.stock_indicator import compute_stock_indicator_daily
+from src.data.stock_state import compute_stock_state_daily
 from src.utils.logging import setup_logging, get_logger
 
 logger = get_logger(__name__)
@@ -61,6 +62,10 @@ def main():
     # 4. 个股技术指标表初始填充
     compute_stock_indicator_daily(engine)
     logger.info("stock_indicator_refreshed")
+
+    # 5. 个股技术状态表初始填充
+    compute_stock_state_daily(engine)
+    logger.info("stock_state_refreshed")
 
     logger.info("init_db_completed")
 
