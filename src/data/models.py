@@ -265,6 +265,40 @@ class StockStateDaily(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class StockFactorDaily(Base):
+    """个股每日因子评分表 (TimescaleDB hypertable)。
+
+    Factor Layer — 将 stock_state_daily 的布尔状态组合成因子评分。
+    不保存因子公式、权重配置、状态规则。
+    数据来源：stock_state_daily + stock_block_relation（仅排名计算）。
+    """
+
+    __tablename__ = "stock_factor_daily"
+
+    trade_date = Column(Date, primary_key=True)
+    stock_code = Column(String(16), primary_key=True)
+
+    # 因子评分
+    trend_score = Column(Float)
+    momentum_score = Column(Float)
+    capital_score = Column(Float)
+    volume_price_score = Column(Float)
+    breakout_score = Column(Float)
+
+    # 风险扣分
+    risk_penalty = Column(Float)
+
+    # 综合评分
+    total_score = Column(Float)
+
+    # 排名
+    market_rank = Column(Integer)
+    block_rank = Column(Integer)
+
+    factor_version = Column(String(20), default="v1.0")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 def get_engine(dsn: str | None = None):
     settings = get_settings()
     url = dsn or settings.database.dsn
@@ -466,5 +500,24 @@ def init_db(engine=None):
             conn.execute(text(
                 f"CREATE INDEX IF NOT EXISTS {idx_name} "
                 f"ON stock_state_daily ({idx_col})"
+            ))
+
+        # stock_factor_daily hypertable
+        conn.execute(
+            text(
+                "SELECT create_hypertable('stock_factor_daily', 'trade_date', "
+                "chunk_time_interval => INTERVAL '1 month', "
+                "if_not_exists => TRUE)"
+            )
+        )
+        # 建立 stock_factor_daily 索引
+        for idx_col, idx_name in [
+            ("trade_date", "idx_factor_date"),
+            ("stock_code", "idx_factor_code"),
+            ("total_score", "idx_factor_total_score"),
+        ]:
+            conn.execute(text(
+                f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                f"ON stock_factor_daily ({idx_col})"
             ))
         conn.commit()
