@@ -292,14 +292,14 @@ def compute_stock_indicator_daily(engine) -> int:
 
         if last_date >= latest_stock:
             logger.info(
-                "indicator_up_to_date",
+                "stock_indicator_up_to_date",
                 last_indicator_date=str(last_date),
                 latest_stock_date=str(latest_stock),
             )
             return 0
 
         logger.info(
-            "compute_indicator_start",
+            "stock_compute_indicator_start",
             from_date=str(last_date),
             to_date=str(latest_stock),
         )
@@ -311,7 +311,7 @@ def compute_stock_indicator_daily(engine) -> int:
                 text("SELECT DISTINCT code FROM stock_data ORDER BY code")
             ).fetchall()
         ]
-        logger.info("indicator_stock_count", count=len(stocks))
+        logger.info("stock_indicator_stock_count", count=len(stocks))
 
         total_rows = 0
         processed = 0
@@ -336,7 +336,7 @@ def compute_stock_indicator_daily(engine) -> int:
 
             if processed % 500 == 0:
                 logger.info(
-                    "indicator_progress",
+                    "stock_indicator_progress",
                     processed=processed,
                     total_stocks=len(stocks),
                     rows_written=total_rows,
@@ -344,7 +344,7 @@ def compute_stock_indicator_daily(engine) -> int:
 
         conn.commit()
         logger.info(
-            "compute_indicator_completed",
+            "stock_compute_indicator_completed",
             total_rows=total_rows,
             stocks_processed=processed,
             stocks_skipped=skipped,
