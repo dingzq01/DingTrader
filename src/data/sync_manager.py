@@ -13,6 +13,7 @@ from src.data.block_stat import compute_block_stat_daily
 from src.data.stock_indicator import compute_stock_indicator_daily
 from src.data.stock_state import compute_stock_state_daily
 from src.factors.stock_factor import compute_stock_factor_daily
+from src.factors.block_factor import compute_block_factor_daily
 from src.tq_bridge.client import TQClient
 from src.utils.logging import get_logger
 
@@ -117,7 +118,6 @@ def full_sync(client: TQClient):
     compute_stock_factor_daily(engine)
 
     # 11. 刷新板块因子评分表（自动补全到最新日期）
-    from src.factors.block_factor import compute_block_factor_daily
     compute_block_factor_daily(engine)
 
     logger.info(

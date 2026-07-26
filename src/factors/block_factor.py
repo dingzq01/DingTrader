@@ -70,7 +70,7 @@ WHERE trade_date > :lookback_date
 ORDER BY trade_date, block_code
 """
 
-# 全市场排名更新
+# 全市场排名更新（排除 market 类型的行）
 _UPDATE_MARKET_RANK_SQL = """
 UPDATE block_factor_daily bfd
 SET market_rank = ranked.rn
@@ -79,6 +79,7 @@ FROM (
            ROW_NUMBER() OVER (PARTITION BY trade_date ORDER BY total_score DESC) AS rn
     FROM block_factor_daily
     WHERE trade_date > :last_date
+      AND block_type != 'market'
 ) ranked
 WHERE bfd.trade_date = ranked.trade_date
   AND bfd.block_code = ranked.block_code
@@ -352,7 +353,9 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     result.loc[market_mask, "total_score"] = 50.0
 
     # 排名先置 NULL，后续通过 SQL 窗口函数更新
+    # market 行的 market_rank 始终为 0，不参与板块间排名
     result["market_rank"] = None
+    result.loc[market_mask, "market_rank"] = 0
 
     return result
 
