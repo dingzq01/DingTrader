@@ -180,7 +180,7 @@ def compute_stock_factor_daily(engine) -> int:
         ).scalar()
 
         if latest_state is None:
-            logger.warning("compute_factor_skipped_no_state_data")
+            logger.warning("stock_factor_skipped_no_state_data")
             return 0
 
         if last_date >= latest_state:
@@ -192,7 +192,7 @@ def compute_stock_factor_daily(engine) -> int:
             return 0
 
         logger.info(
-            "compute_stock_factor_start",
+            "stock_factor_start",
             from_date=str(last_date),
             to_date=str(latest_state),
         )
@@ -205,11 +205,11 @@ def compute_stock_factor_daily(engine) -> int:
         )
 
         if states_df.empty:
-            logger.info("compute_factor_no_new_rows")
+            logger.info("stock_factor_no_new_rows")
             return 0
 
         logger.info(
-            "factor_states_loaded",
+            "stock_factor_states_loaded",
             rows=len(states_df),
             dates=states_df["trade_date"].nunique(),
             stocks=states_df["stock_code"].nunique(),
@@ -221,24 +221,24 @@ def compute_stock_factor_daily(engine) -> int:
 
         # 4. 插入/更新因子评分
         conn.execute(text(_INSERT_SQL), records)
-        logger.info("factor_scores_inserted", rows=len(records))
+        logger.info("stock_factor_scores_inserted", rows=len(records))
 
         # 5. 更新全市场排名
         mr_result = conn.execute(
             text(_UPDATE_MARKET_RANK_SQL),
             {"last_date": last_date},
         )
-        logger.info("factor_market_rank_updated", rows=mr_result.rowcount)
+        logger.info("stock_factor_market_rank_updated", rows=mr_result.rowcount)
 
         # 6. 更新板块内部排名
         br_result = conn.execute(
             text(_UPDATE_BLOCK_RANK_SQL),
             {"last_date": last_date},
         )
-        logger.info("factor_block_rank_updated", rows=br_result.rowcount)
+        logger.info("stock_factor_block_rank_updated", rows=br_result.rowcount)
 
         conn.commit()
-        logger.info("compute_factor_completed", total_rows=len(records))
+        logger.info("stock_factor_completed", total_rows=len(records))
         return len(records)
 
 

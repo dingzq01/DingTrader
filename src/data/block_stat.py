@@ -152,7 +152,7 @@ def compute_block_stat_daily(engine) -> int:
         ).scalar()
 
         if latest_stock is None:
-            logger.warning("compute_block_stat_skipped_no_stock_data")
+            logger.warning("block_stat_skipped_no_stock_data")
             return 0
 
         if last_date >= latest_stock:
@@ -164,7 +164,7 @@ def compute_block_stat_daily(engine) -> int:
             return 0
 
         logger.info(
-            "compute_block_stat_start",
+            "block_stat_start",
             from_date=str(last_date),
             to_date=str(latest_stock),
         )
@@ -185,5 +185,5 @@ def compute_block_stat_daily(engine) -> int:
         logger.info("block_stat_market_completed", rows=market_rows)
 
         conn.commit()
-        logger.info("compute_block_stat_completed", total_rows=total_rows)
+        logger.info("block_stat_completed", total_rows=total_rows)
         return total_rows

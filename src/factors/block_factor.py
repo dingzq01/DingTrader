@@ -392,7 +392,7 @@ def compute_block_factor_daily(engine) -> int:
         ).scalar()
 
         if latest_stat is None:
-            logger.warning("compute_block_factor_skipped_no_stat_data")
+            logger.warning("block_factor_skipped_no_stat_data")
             return 0
 
         if last_date >= latest_stat:
@@ -404,7 +404,7 @@ def compute_block_factor_daily(engine) -> int:
             return 0
 
         logger.info(
-            "compute_block_factor_start",
+            "block_factor_start",
             from_date=str(last_date),
             to_date=str(latest_stat),
         )
@@ -422,7 +422,7 @@ def compute_block_factor_daily(engine) -> int:
         )
 
         if raw_df.empty:
-            logger.info("compute_block_factor_no_data")
+            logger.info("block_factor_no_data")
             return 0
 
         raw_df = raw_df.sort_values("trade_date")
@@ -450,7 +450,7 @@ def compute_block_factor_daily(engine) -> int:
         new_df = scores_df[new_mask].copy()
 
         if new_df.empty:
-            logger.info("compute_block_factor_no_new_dates")
+            logger.info("block_factor_no_new_dates")
             return 0
 
         logger.info(
@@ -473,7 +473,7 @@ def compute_block_factor_daily(engine) -> int:
         logger.info("block_factor_market_rank_updated", rows=mr_result.rowcount)
 
         conn.commit()
-        logger.info("compute_block_factor_completed", total_rows=len(records))
+        logger.info("block_factor_completed", total_rows=len(records))
         return len(records)
 
 
