@@ -182,14 +182,14 @@ def compute_stock_factor_daily(engine) -> int:
 
         if last_date >= latest_state:
             logger.info(
-                "factor_up_to_date",
+                "stock_factor_up_to_date",
                 last_factor_date=str(last_date),
                 latest_state_date=str(latest_state),
             )
             return 0
 
         logger.info(
-            "compute_factor_start",
+            "compute_stock_factor_start",
             from_date=str(last_date),
             to_date=str(latest_state),
         )
