@@ -116,6 +116,10 @@ def full_sync(client: TQClient):
     # 10. 刷新个股因子评分表（自动补全到最新日期）
     compute_stock_factor_daily(engine)
 
+    # 11. 刷新板块因子评分表（自动补全到最新日期）
+    from src.factors.block_factor import compute_block_factor_daily
+    compute_block_factor_daily(engine)
+
     logger.info(
         "full_sync_completed",
         stock_success=len(stock_records) - len(stock_failed),

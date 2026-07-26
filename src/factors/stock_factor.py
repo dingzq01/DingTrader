@@ -10,7 +10,7 @@
 import pandas as pd
 from sqlalchemy import text
 
-from src.factors.factor_config import STOCK_FACTOR_CONFIG, get_all_state_columns
+from src.factors.stock_factor_config import STOCK_FACTOR_CONFIG, get_all_state_columns
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)

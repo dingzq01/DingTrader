@@ -72,6 +72,11 @@ def main():
     compute_stock_factor_daily(engine)
     logger.info("stock_factor_refreshed")
 
+    # 7. 板块因子评分表初始填充
+    from src.factors.block_factor import compute_block_factor_daily
+    compute_block_factor_daily(engine)
+    logger.info("block_factor_refreshed")
+
     logger.info("init_db_completed")
 
 

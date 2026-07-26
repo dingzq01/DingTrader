@@ -21,6 +21,49 @@ class Base(DeclarativeBase):
     pass
 
 
+class BlockFactorDaily(Base):
+    """板块每日因子评分表 (TimescaleDB hypertable)。
+
+    Factor Layer — 从 block_stat_daily 计算板块因子评分。
+    不保存因子公式、权重配置。
+    数据来源：block_stat_daily。
+    """
+
+    __tablename__ = "block_factor_daily"
+
+    trade_date = Column(Date, primary_key=True)
+    block_code = Column(String(32), primary_key=True)
+    block_name = Column(String(100), nullable=False)
+    block_type = Column(String(20), nullable=False)
+
+    # 热度因子
+    heat_score = Column(Float)
+
+    # 强度因子
+    strength_score = Column(Float)
+
+    # 赚钱效应因子
+    profit_score = Column(Float)
+
+    # 持续性因子
+    persistence_score = Column(Float)
+
+    # 资金因子
+    capital_score = Column(Float)
+
+    # 风险扣分
+    risk_penalty = Column(Float)
+
+    # 综合评分
+    total_score = Column(Float)
+
+    # 排名
+    market_rank = Column(Integer)
+
+    factor_version = Column(String(20), default="v1.0")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class StockBlockRelation(Base):
     """板块-个股关系主链路。"""
 
@@ -519,5 +562,24 @@ def init_db(engine=None):
             conn.execute(text(
                 f"CREATE INDEX IF NOT EXISTS {idx_name} "
                 f"ON stock_factor_daily ({idx_col})"
+            ))
+
+        # block_factor_daily hypertable
+        conn.execute(
+            text(
+                "SELECT create_hypertable('block_factor_daily', 'trade_date', "
+                "chunk_time_interval => INTERVAL '1 month', "
+                "if_not_exists => TRUE)"
+            )
+        )
+        # 建立 block_factor_daily 索引
+        for idx_col, idx_name in [
+            ("trade_date", "idx_block_factor_date"),
+            ("block_code", "idx_block_factor_code"),
+            ("total_score", "idx_block_factor_total_score"),
+        ]:
+            conn.execute(text(
+                f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                f"ON block_factor_daily ({idx_col})"
             ))
         conn.commit()
