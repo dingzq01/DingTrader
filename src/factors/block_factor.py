@@ -351,6 +351,9 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     # market 的 total_score 也设为中性，不参与排名
     result.loc[market_mask, "total_score"] = 50.0
 
+    # 排名先置 NULL，后续通过 SQL 窗口函数更新
+    result["market_rank"] = None
+
     return result
 
 
