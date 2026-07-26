@@ -417,6 +417,8 @@ def compute_block_factor_daily(engine) -> int:
             return 0
 
         raw_df = raw_df.sort_values("trade_date")
+        # 统一 trade_date 为 Timestamp 类型，避免和 datetime.date 比较时报错
+        raw_df["trade_date"] = pd.to_datetime(raw_df["trade_date"])
 
         # 3. 提取 market_amount 映射
         market_df = raw_df[raw_df["block_type"] == "market"]
@@ -434,7 +436,8 @@ def compute_block_factor_daily(engine) -> int:
         scores_df = _standardize_and_combine(df)
 
         # 7. 只保留新增日期的行
-        new_mask = scores_df["trade_date"] > pd.to_datetime(last_date)
+        last_date_ts = pd.to_datetime(last_date)
+        new_mask = scores_df["trade_date"] > last_date_ts
         new_df = scores_df[new_mask].copy()
 
         if new_df.empty:
