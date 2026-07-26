@@ -60,6 +60,9 @@ class BlockFactorDaily(Base):
     # 排名
     market_rank = Column(Integer)
 
+    # 市场状态（仅 market 行有效：BULL/NORMAL/CAUTION/BEAR）
+    market_state = Column(String(20))
+
     factor_version = Column(String(20), default="v1.0")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -68,9 +71,7 @@ class StockBlockRelation(Base):
     """板块-个股关系主链路。"""
 
     __tablename__ = "stock_block_relation"
-    __table_args__ = (
-        UniqueConstraint("block_code", "stock_code", name="uq_stock_block_relation"),
-    )
+    __table_args__ = (UniqueConstraint("block_code", "stock_code", name="uq_stock_block_relation"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     block_code = Column(String(20), nullable=False, index=True)
@@ -358,19 +359,12 @@ def _table_exists(conn, table_name: str) -> bool:
 def _ensure_pk(conn, table_name: str, columns: tuple[str, ...], constraint_name: str):
     conn.execute(text(f"ALTER TABLE IF EXISTS {table_name} DROP CONSTRAINT IF EXISTS {constraint_name}"))
     cols = ", ".join(columns)
-    conn.execute(
-        text(
-            f"ALTER TABLE IF EXISTS {table_name} "
-            f"ADD CONSTRAINT {constraint_name} PRIMARY KEY ({cols})"
-        )
-    )
+    conn.execute(text(f"ALTER TABLE IF EXISTS {table_name} ADD CONSTRAINT {constraint_name} PRIMARY KEY ({cols})"))
 
 
 def _drop_legacy_sector_tables(conn):
     for table_name in ("sector_stocks", "sectors"):
         conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-
-
 
 
 def _fill_stock_name_from_relation(conn):
@@ -386,13 +380,7 @@ def _fill_stock_name_from_relation(conn):
             "AND TRIM(sbr.stock_name) <> ''"
         )
     )
-    conn.execute(
-        text(
-            "UPDATE stock_data "
-            "SET name = code "
-            "WHERE name IS NULL OR TRIM(name) = ''"
-        )
-    )
+    conn.execute(text("UPDATE stock_data SET name = code WHERE name IS NULL OR TRIM(name) = ''"))
 
 
 def _ensure_not_null_stock_name(conn):
@@ -416,15 +404,18 @@ def init_db(engine=None):
         if _table_exists(conn, "stock_data"):
             for col_name in ("change_pct", "turnover"):
                 if not _column_exists(conn, "stock_data", col_name):
-                    conn.execute(text(
-                        f"ALTER TABLE stock_data ADD COLUMN {col_name} FLOAT"
-                    ))
+                    conn.execute(text(f"ALTER TABLE stock_data ADD COLUMN {col_name} FLOAT"))
 
         if _table_exists(conn, "stock_block_relation"):
             _fill_stock_name_from_relation(conn)
             _ensure_not_null_stock_name(conn)
 
-        _ensure_pk(conn, "stock_block_relation", ("block_code", "stock_code"), "stock_block_relation_pkey")
+        _ensure_pk(
+            conn,
+            "stock_block_relation",
+            ("block_code", "stock_code"),
+            "stock_block_relation_pkey",
+        )
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(
             text(
@@ -453,10 +444,7 @@ def init_db(engine=None):
             ("block_type", "idx_block_stat_type"),
             ("block_code", "idx_block_stat_code"),
         ]:
-            conn.execute(text(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON block_stat_daily ({idx_col})"
-            ))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON block_stat_daily ({idx_col})"))
 
         # stock_indicator_daily hypertable
         conn.execute(
@@ -471,10 +459,7 @@ def init_db(engine=None):
             ("trade_date", "idx_indicator_date"),
             ("stock_code", "idx_indicator_code"),
         ]:
-            conn.execute(text(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON stock_indicator_daily ({idx_col})"
-            ))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON stock_indicator_daily ({idx_col})"))
 
         # stock_state_daily hypertable
         conn.execute(
@@ -489,10 +474,7 @@ def init_db(engine=None):
             ("trade_date", "idx_state_date"),
             ("stock_code", "idx_state_code"),
         ]:
-            conn.execute(text(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON stock_state_daily ({idx_col})"
-            ))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON stock_state_daily ({idx_col})"))
 
         # stock_factor_daily hypertable
         conn.execute(
@@ -508,10 +490,7 @@ def init_db(engine=None):
             ("stock_code", "idx_factor_code"),
             ("total_score", "idx_factor_total_score"),
         ]:
-            conn.execute(text(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON stock_factor_daily ({idx_col})"
-            ))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON stock_factor_daily ({idx_col})"))
 
         # block_factor_daily hypertable
         conn.execute(
@@ -527,8 +506,10 @@ def init_db(engine=None):
             ("block_code", "idx_block_factor_code"),
             ("total_score", "idx_block_factor_total_score"),
         ]:
-            conn.execute(text(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON block_factor_daily ({idx_col})"
-            ))
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON block_factor_daily ({idx_col})"))
+
+        # 为已有 block_factor_daily 表添加 market_state 列
+        if _table_exists(conn, "block_factor_daily") and not _column_exists(conn, "block_factor_daily", "market_state"):
+            conn.execute(text("ALTER TABLE block_factor_daily ADD COLUMN market_state VARCHAR(20)"))
+
         conn.commit()

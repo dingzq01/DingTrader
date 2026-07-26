@@ -8,6 +8,7 @@
 所有评分规则来自 block_factor_config.py，禁止硬编码分值。
 """
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
@@ -19,6 +20,7 @@ from src.factors.block_factor_config import (
     LOOKBACK_STD20,
     RISK_LOOKBACK,
 )
+from src.factors.market_factor_config import MARKET_FACTOR_CONFIG
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -27,9 +29,18 @@ logger = get_logger(__name__)
 # 需要从 block_stat_daily 读取的列
 # ---------------------------------------------------------------------------
 _READ_COLS = [
-    "trade_date", "block_code", "block_name", "block_type",
-    "stock_count", "avg_change_pct", "median_change_pct",
-    "up_ratio", "limit_up_count", "gt_5_count",
+    "trade_date",
+    "block_code",
+    "block_name",
+    "block_type",
+    "stock_count",
+    "avg_change_pct",
+    "median_change_pct",
+    "up_ratio",
+    "down_ratio",
+    "limit_up_count",
+    "limit_down_count",
+    "gt_5_count",
     "amount",
 ]
 
@@ -37,9 +48,15 @@ _READ_COLS = [
 # INSERT SQL
 # ---------------------------------------------------------------------------
 _SCORE_COLS = [
-    "heat_score", "strength_score", "profit_score",
-    "persistence_score", "capital_score",
-    "risk_penalty", "total_score", "market_rank",
+    "heat_score",
+    "strength_score",
+    "profit_score",
+    "persistence_score",
+    "capital_score",
+    "risk_penalty",
+    "total_score",
+    "market_rank",
+    "market_state",
 ]
 
 _INSERT_COLS = ",\n    ".join(_SCORE_COLS)
@@ -65,7 +82,7 @@ ON CONFLICT (trade_date, block_code) DO UPDATE SET
 """
 
 _READ_SQL = f"""
-SELECT {', '.join(_READ_COLS)}
+SELECT {", ".join(_READ_COLS)}
 FROM block_stat_daily
 WHERE trade_date > :lookback_date
 ORDER BY trade_date, block_code
@@ -90,6 +107,7 @@ WHERE bfd.trade_date = ranked.trade_date
 # ---------------------------------------------------------------------------
 # 标准化工具
 # ---------------------------------------------------------------------------
+
 
 def _minmax_standardize(series: pd.Series) -> pd.Series:
     """Min-max 标准化到 0-100，所有值相同时返回 50。"""
@@ -121,6 +139,7 @@ def _tiered_score(series: pd.Series, tiers: list[tuple[float, float, float]]) ->
 # 因子计算
 # ---------------------------------------------------------------------------
 
+
 def _compute_raw_sub_factors(df: pd.DataFrame, market_amount_map: dict) -> pd.DataFrame:
     """计算所有原始子因子值（未标准化）。
 
@@ -130,12 +149,16 @@ def _compute_raw_sub_factors(df: pd.DataFrame, market_amount_map: dict) -> pd.Da
 
     # --- 基础比值 ---
     result["amount_ratio"] = df.apply(
-        lambda r: r["amount"] / market_amount_map.get(r["trade_date"], r["amount"])
-        if market_amount_map.get(r["trade_date"], 0) > 0 else 0.0,
+        lambda r: (
+            r["amount"] / market_amount_map.get(r["trade_date"], r["amount"])
+            if market_amount_map.get(r["trade_date"], 0) > 0
+            else 0.0
+        ),
         axis=1,
     )
     result["limit_up_ratio"] = df["limit_up_count"] / df["stock_count"].replace(0, 1)
     result["gt_5_ratio"] = df["gt_5_count"] / df["stock_count"].replace(0, 1)
+    result["limit_down_ratio"] = df["limit_down_count"] / df["stock_count"].replace(0, 1)
 
     return result
 
@@ -152,34 +175,22 @@ def _compute_rolling_stats(full_df: pd.DataFrame) -> pd.DataFrame:
     grouped = df.groupby("block_code")
 
     # amount_ratio 的 5日MA
-    df["amount_ratio_ma5"] = grouped["amount_ratio"].transform(
-        lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean()
-    )
+    df["amount_ratio_ma5"] = grouped["amount_ratio"].transform(lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean())
 
     # amount 的 5日MA
-    df["amount_ma5"] = grouped["amount"].transform(
-        lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean()
-    )
+    df["amount_ma5"] = grouped["amount"].transform(lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean())
 
     # amount 的 20日MA
-    df["amount_ma20"] = grouped["amount"].transform(
-        lambda s: s.rolling(LOOKBACK_MA20, min_periods=1).mean()
-    )
+    df["amount_ma20"] = grouped["amount"].transform(lambda s: s.rolling(LOOKBACK_MA20, min_periods=1).mean())
 
     # amount 的 20日STD
-    df["amount_std20"] = grouped["amount"].transform(
-        lambda s: s.rolling(LOOKBACK_STD20, min_periods=1).std()
-    )
+    df["amount_std20"] = grouped["amount"].transform(lambda s: s.rolling(LOOKBACK_STD20, min_periods=1).std())
 
     # avg_change_pct 的 5日MA
-    df["avg_change_ma5"] = grouped["avg_change_pct"].transform(
-        lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean()
-    )
+    df["avg_change_ma5"] = grouped["avg_change_pct"].transform(lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean())
 
     # up_ratio 的 5日MA
-    df["up_ratio_ma5"] = grouped["up_ratio"].transform(
-        lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean()
-    )
+    df["up_ratio_ma5"] = grouped["up_ratio"].transform(lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).mean())
 
     # amount_growth = today_amount / MA5(amount) - 1
     df["amount_growth"] = df["amount"] / df["amount_ma5"].replace(0, 1) - 1
@@ -198,7 +209,148 @@ def _compute_rolling_stats(full_df: pd.DataFrame) -> pd.DataFrame:
     # 别名：heat_factor config 使用 amount_growth_5d
     df["amount_growth_5d"] = df["amount_growth"]
 
+    # amount 的 20 日分位（market 热度因子使用）
+    # 值域 0-1：today 的 amount 在过去 20 日中所处的百分位
+    df["amount_20d_position"] = grouped["amount"].transform(
+        lambda s: s.rolling(LOOKBACK_MA20, min_periods=1).rank(pct=True)
+    )
+
+    # amount_growth 的 5 日趋势（market 持续性因子使用）
+    # 过去 5 日中 amount_growth 逐日递增的天数（0-4）
+    df["_amount_growth_diff"] = grouped["amount_growth"].diff()
+    df["amount_growth_inc_count"] = grouped["_amount_growth_diff"].transform(
+        lambda s: s.rolling(LOOKBACK_MA5, min_periods=1).apply(
+            lambda x: (x[-4:] > 0).sum() if len(x) >= 2 else 0,
+            raw=True,
+        )
+    )
+
     return df
+
+
+def _compute_market_scores(market_df: pd.DataFrame) -> pd.DataFrame:
+    """对 market 行使用独立 tiered scoring 计算真实因子评分。
+
+    market 不使用截面 min-max 标准化，而是按 plan06 定义的阈值分段打分。
+
+    Args:
+        market_df: 仅含 market 行 (block_type='market') 的 DataFrame，
+                   必须已包含所有 raw 值与滚动统计量。
+
+    Returns:
+        [trade_date, block_code, block_name, block_type,
+         heat_score, strength_score, profit_score, capital_score,
+         persistence_score, risk_penalty, total_score, market_state, market_rank]
+    """
+    cfg = MARKET_FACTOR_CONFIG
+    df = market_df.copy()
+    result = df[
+        [
+            "trade_date",
+            "block_code",
+            "block_name",
+            "block_type",
+        ]
+    ].copy()
+
+    # --- heat_score (15%) ---
+    heat_cfg = cfg["heat_score"]
+    heat_parts = {}
+    for sub_name, sub_cfg in heat_cfg["sub_factors"].items():
+        raw_col = sub_name  # amount_growth, amount_20d_position
+        tier = _tiered_score(df[raw_col].fillna(0), sub_cfg["tiers"])
+        heat_parts[sub_name] = tier * sub_cfg["weight"]
+    result["heat_score"] = sum(heat_parts.values())
+
+    # --- strength_score (25%) ---
+    strength_cfg = cfg["strength_score"]
+    strength_parts = {}
+    for sub_name, sub_cfg in strength_cfg["sub_factors"].items():
+        raw_col = sub_name  # avg_change_pct, median_change_pct, up_ratio
+        tier = _tiered_score(df[raw_col].fillna(0), sub_cfg["tiers"])
+        strength_parts[sub_name] = tier * sub_cfg["weight"]
+    result["strength_score"] = sum(strength_parts.values())
+
+    # --- profit_score (25%) ---
+    profit_cfg = cfg["profit_score"]
+    profit_parts = {}
+    for sub_name, sub_cfg in profit_cfg["sub_factors"].items():
+        raw_col = sub_name  # limit_up_ratio, gt_5_ratio, up_ratio
+        tier = _tiered_score(df[raw_col].fillna(0), sub_cfg["tiers"])
+        profit_parts[sub_name] = tier * sub_cfg["weight"]
+    result["profit_score"] = sum(profit_parts.values())
+
+    # --- capital_score (20%) ---
+    capital_cfg = cfg["capital_score"]
+    capital_parts = {}
+    for sub_name, sub_cfg in capital_cfg["sub_factors"].items():
+        raw_col = sub_name  # amount_growth, amount_zscore
+        tier = _tiered_score(df[raw_col].fillna(0), sub_cfg["tiers"])
+        capital_parts[sub_name] = tier * sub_cfg["weight"]
+    result["capital_score"] = sum(capital_parts.values())
+
+    # --- persistence_score (15%) ---
+    persist_cfg = cfg["persistence_score"]
+    persist_parts = {}
+    col_map = {
+        "ma5_avg_change": "avg_change_ma5",
+        "ma5_up_ratio": "up_ratio_ma5",
+        "amount_growth_trend": "amount_growth_inc_count",
+    }
+    for sub_name, sub_cfg in persist_cfg["sub_factors"].items():
+        raw_col = col_map[sub_name]
+        tier = _tiered_score(df[raw_col].fillna(0), sub_cfg["tiers"])
+        persist_parts[sub_name] = tier * sub_cfg["weight"]
+    result["persistence_score"] = sum(persist_parts.values())
+
+    # --- risk_penalty ---
+    risk_cfg = cfg["risk_penalty"]
+    result["risk_penalty"] = 0.0
+
+    # 1) 市场大跌风险
+    crash_cfg = risk_cfg["rules"]["avg_change_crash"]
+    crash_mask = df["avg_change_pct"] < crash_cfg["avg_change_threshold"]
+    result.loc[crash_mask, "risk_penalty"] += crash_cfg["penalty"]
+
+    # 2) 下跌扩散风险
+    down_wide_mask = df["down_ratio"] > risk_cfg["rules"]["down_ratio_wide"]["down_ratio_threshold"]
+    result.loc[down_wide_mask, "risk_penalty"] += risk_cfg["rules"]["down_ratio_wide"]["penalty"]
+
+    # 3) 跌停风险
+    limit_down_ratio = df["limit_down_count"] / df["stock_count"].replace(0, 1)
+    ld_mask = limit_down_ratio > risk_cfg["rules"]["limit_down_risk"]["limit_down_ratio_threshold"]
+    result.loc[ld_mask, "risk_penalty"] += risk_cfg["rules"]["limit_down_risk"]["penalty"]
+
+    # 4) 放量下跌风险
+    vol_drop_cfg = risk_cfg["rules"]["volume_drop"]
+    vol_drop_mask = (df["amount_zscore"] > vol_drop_cfg["amount_zscore_threshold"]) & (
+        df["avg_change_pct"] < vol_drop_cfg["avg_change_threshold"]
+    )
+    result.loc[vol_drop_mask, "risk_penalty"] += vol_drop_cfg["penalty"]
+
+    # floor
+    result["risk_penalty"] = result["risk_penalty"].clip(lower=risk_cfg["floor"])
+
+    # --- total_score (0-100) ---
+    result["total_score"] = (
+        result["heat_score"] * heat_cfg["weight"]
+        + result["strength_score"] * strength_cfg["weight"]
+        + result["profit_score"] * profit_cfg["weight"]
+        + result["capital_score"] * capital_cfg["weight"]
+        + result["persistence_score"] * persist_cfg["weight"]
+        + result["risk_penalty"]
+    )
+    result["total_score"] = result["total_score"].clip(0, 100)
+
+    # --- market_state ---
+    state_conditions = [result["total_score"] >= t for t, _ in cfg["market_state"]["thresholds"]]
+    state_choices = [s for _, s in cfg["market_state"]["thresholds"]]
+    result["market_state"] = np.select(state_conditions, state_choices, default="BEAR")
+
+    # market_rank 始终 0
+    result["market_rank"] = 0
+
+    return result
 
 
 def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
@@ -218,9 +370,7 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
         # 对每个交易日单独做标准化
         raw_col = sub_name
         norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(
-            _minmax_standardize
-        )
+        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
         heat_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
     non_market["heat_score"] = sum(heat_parts.values())
 
@@ -247,9 +397,7 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     for sub_name, sub_cfg in profit_cfg["sub_factors"].items():
         raw_col = sub_name  # limit_up_ratio, gt_5_ratio, up_ratio
         norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(
-            _minmax_standardize
-        )
+        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
         profit_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
     non_market["profit_score"] = sum(profit_parts.values())
 
@@ -264,9 +412,7 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     for sub_name, sub_cfg in persist_cfg["sub_factors"].items():
         raw_col = col_map_persist[sub_name]
         norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(
-            _minmax_standardize
-        )
+        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
         persist_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
     non_market["persistence_score"] = sum(persist_parts.values())
 
@@ -276,9 +422,7 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     for sub_name, sub_cfg in capital_cfg["sub_factors"].items():
         raw_col = sub_name  # amount_ratio_change, amount_growth
         norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(
-            _minmax_standardize
-        )
+        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
         capital_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
     non_market["capital_score"] = sum(capital_parts.values())
 
@@ -298,17 +442,13 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     non_market.loc[consec_up_mask, "risk_penalty"] += risk_cfg["consecutive_up"]["penalty"]
 
     # 高位高潮风险
-    high_limit_mask = (
-        non_market["limit_up_ratio"]
-        > risk_cfg["high_limit_up_ratio"]["limit_up_ratio_threshold"]
-    )
+    high_limit_mask = non_market["limit_up_ratio"] > risk_cfg["high_limit_up_ratio"]["limit_up_ratio_threshold"]
     non_market.loc[high_limit_mask, "risk_penalty"] += risk_cfg["high_limit_up_ratio"]["penalty"]
 
     # 成交异常风险
     extreme_cfg = risk_cfg["extreme_amount"]
-    extreme_mask = (
-        (non_market["amount_zscore"] > extreme_cfg["zscore_threshold"])
-        & (non_market["avg_change_pct"] > extreme_cfg["avg_change_threshold"])
+    extreme_mask = (non_market["amount_zscore"] > extreme_cfg["zscore_threshold"]) & (
+        non_market["avg_change_pct"] > extreme_cfg["avg_change_threshold"]
     )
     non_market.loc[extreme_mask, "risk_penalty"] += extreme_cfg["penalty"]
 
@@ -329,34 +469,37 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
         + non_market["risk_penalty"]
     )
 
-    # --- 对 market 行赋中性分 ---
+    # --- 将 non_market 的评分合并回 result ---
     score_cols = [
-        "heat_score", "strength_score", "profit_score",
-        "persistence_score", "capital_score",
-        "risk_penalty", "total_score",
+        "heat_score",
+        "strength_score",
+        "profit_score",
+        "persistence_score",
+        "capital_score",
+        "risk_penalty",
+        "total_score",
     ]
     for col in score_cols:
         result[col] = pd.NA
-
-    # 将 non_market 的结果合并回 result
-    for col in score_cols:
         result.loc[non_market.index, col] = non_market[col]
 
-    # market 行给中性值
-    market_mask = result["block_type"] == "market"
-    result.loc[market_mask, "heat_score"] = 50.0
-    result.loc[market_mask, "strength_score"] = 50.0
-    result.loc[market_mask, "profit_score"] = 50.0
-    result.loc[market_mask, "persistence_score"] = 50.0
-    result.loc[market_mask, "capital_score"] = 50.0
-    result.loc[market_mask, "risk_penalty"] = 0.0
-    # market 的 total_score 也设为中性，不参与排名
-    result.loc[market_mask, "total_score"] = 50.0
+    # --- market 行使用独立 tiered scoring ---
+    market_mask = df["block_type"] == "market"
+    if market_mask.any():
+        market_scored = _compute_market_scores(df[market_mask])
+        for col in score_cols:
+            result.loc[market_scored.index, col] = market_scored[col]
+        result.loc[market_scored.index, "market_state"] = market_scored["market_state"]
+        result.loc[market_scored.index, "market_rank"] = market_scored["market_rank"]
+
+    # non-market 行的 market_state 为空
+    if "market_state" not in result.columns:
+        result["market_state"] = None
 
     # 排名先置 NULL，后续通过 SQL 窗口函数更新
-    # market 行的 market_rank 始终为 0，不参与板块间排名
-    result["market_rank"] = None
-    result.loc[market_mask, "market_rank"] = 0
+    # market 行的 market_rank 已在 _compute_market_scores 中设为 0
+    if "market_rank" not in result.columns:
+        result["market_rank"] = None
 
     return result
 
@@ -364,6 +507,7 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # 公开接口
 # ---------------------------------------------------------------------------
+
 
 def compute_block_factor_daily(engine) -> int:
     """增量刷新 block_factor_daily 表。
@@ -380,16 +524,11 @@ def compute_block_factor_daily(engine) -> int:
         # 1. 获取已有最新日期
         default_date = get_settings().sync.data_start_date
         last_date = conn.execute(
-            text(
-                "SELECT COALESCE(MAX(trade_date), CAST(:default_date AS date)) "
-                "FROM block_factor_daily"
-            ),
+            text("SELECT COALESCE(MAX(trade_date), CAST(:default_date AS date)) FROM block_factor_daily"),
             {"default_date": default_date},
         ).scalar()
 
-        latest_stat = conn.execute(
-            text("SELECT MAX(trade_date) FROM block_stat_daily")
-        ).scalar()
+        latest_stat = conn.execute(text("SELECT MAX(trade_date) FROM block_stat_daily")).scalar()
 
         if latest_stat is None:
             logger.warning("block_factor_skipped_no_stat_data")
@@ -411,9 +550,7 @@ def compute_block_factor_daily(engine) -> int:
 
         # 2. 读取 block_stat_daily（含历史窗口）
         # 回溯足够天数用于 MA20 + 连续3日检测
-        lookback_date = str(
-            pd.to_datetime(last_date) - pd.Timedelta(days=max(LOOKBACK_MA20, RISK_LOOKBACK) * 2)
-        )
+        lookback_date = str(pd.to_datetime(last_date) - pd.Timedelta(days=max(LOOKBACK_MA20, RISK_LOOKBACK) * 2))
 
         raw_df = pd.read_sql_query(
             text(_READ_SQL),
