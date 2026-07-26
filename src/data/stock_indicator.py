@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
+from src.config.settings import get_settings
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -271,11 +272,13 @@ def compute_stock_indicator_daily(engine) -> int:
     """
     with engine.connect() as conn:
         # 1. 获取 stock_indicator_daily 已有最新日期
+        default_date = get_settings().sync.data_start_date
         last_date = conn.execute(
             text(
-                "SELECT COALESCE(MAX(trade_date), '2026-01-01'::date) "
+                "SELECT COALESCE(MAX(trade_date), :default_date::date) "
                 "FROM stock_indicator_daily"
-            )
+            ),
+            {"default_date": default_date},
         ).scalar()
 
         # 2. 获取 stock_data 最新日期

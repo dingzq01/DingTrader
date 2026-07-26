@@ -23,6 +23,7 @@ sync:
   batch_size: 10
   request_interval_seconds: 1
   max_retries: 3
+  data_start_date: "2024-01-01"
 
 strategies:
   enabled:

@@ -44,6 +44,7 @@ class SyncConfig(BaseModel):
     batch_size: int = 10
     request_interval_seconds: float = 1.0
     max_retries: int = 3
+    data_start_date: str = "2024-01-01"
 
 
 class StrategiesConfig(BaseModel):

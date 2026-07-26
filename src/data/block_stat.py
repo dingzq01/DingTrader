@@ -9,6 +9,7 @@
 
 from sqlalchemy import text
 
+from src.config.settings import get_settings
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -136,11 +137,13 @@ def compute_block_stat_daily(engine) -> int:
     """
     with engine.connect() as conn:
         # 1. 获取 block_stat_daily 已有最新日期
+        default_date = get_settings().sync.data_start_date
         last_date = conn.execute(
             text(
-                "SELECT COALESCE(MAX(trade_date), '2026-01-01'::date) "
+                "SELECT COALESCE(MAX(trade_date), :default_date::date) "
                 "FROM block_stat_daily"
-            )
+            ),
+            {"default_date": default_date},
         ).scalar()
 
         # 2. 获取 stock_data 最新日期

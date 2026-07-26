@@ -11,6 +11,7 @@
 import pandas as pd
 from sqlalchemy import text
 
+from src.config.settings import get_settings
 from src.factors.block_factor_config import (
     BLOCK_FACTOR_CONFIG,
     LOOKBACK_MA5,
@@ -377,11 +378,13 @@ def compute_block_factor_daily(engine) -> int:
     """
     with engine.connect() as conn:
         # 1. 获取已有最新日期
+        default_date = get_settings().sync.data_start_date
         last_date = conn.execute(
             text(
-                "SELECT COALESCE(MAX(trade_date), '2026-01-01'::date) "
+                "SELECT COALESCE(MAX(trade_date), :default_date::date) "
                 "FROM block_factor_daily"
-            )
+            ),
+            {"default_date": default_date},
         ).scalar()
 
         latest_stat = conn.execute(
