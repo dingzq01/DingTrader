@@ -169,7 +169,7 @@ def compute_stock_factor_daily(engine) -> int:
         default_date = get_settings().sync.data_start_date
         last_date = conn.execute(
             text(
-                "SELECT COALESCE(MAX(trade_date), :default_date::date) "
+                "SELECT COALESCE(MAX(trade_date), CAST(:default_date AS date)) "
                 "FROM stock_factor_daily"
             ),
             {"default_date": default_date},
