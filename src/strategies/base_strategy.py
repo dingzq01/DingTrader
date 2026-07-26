@@ -1,13 +1,11 @@
 from abc import ABC, abstractmethod
-from datetime import date
 from typing import Any
 
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from src.data.models import StockData, StockIndicators, get_session
-from src.indicators.registry import compute_for_stock
+from src.data.models import get_session
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -52,35 +50,8 @@ class BaseStrategy(ABC):
             if close_session and session:
                 session.close()
 
-    def compute_indicators(self, df: pd.DataFrame) -> dict[str, float]:
-        """计算所有已注册指标。"""
-        return compute_for_stock(df)
-
-    def save_indicators(self, stock_code: str, trade_date: date,
-                        indicators: dict[str, float], session: Session):
-        """将指标值存入 stock_indicators 表 (EAV模式)。"""
-        for name, value in indicators.items():
-            if value is None:
-                continue
-            # Upsert: 有则更新，无则插入
-            existing = session.get(StockIndicators, {
-                "stock_code": stock_code,
-                "trade_date": trade_date,
-                "indicator_name": name,
-            })
-            if existing:
-                existing.indicator_value = float(value)
-            else:
-                session.add(StockIndicators(
-                    stock_code=stock_code,
-                    trade_date=trade_date,
-                    indicator_name=name,
-                    indicator_value=float(value),
-                ))
-
     @abstractmethod
-    def check_conditions(self, df: pd.DataFrame,
-                         indicators: dict[str, float]) -> tuple[bool, dict[str, Any] | None]:
+    def check_conditions(self, df: pd.DataFrame) -> tuple[bool, dict[str, Any] | None]:
         """核心筛选逻辑 (子类实现)。
 
         Returns: (是否符合条件, 可选详情dict)
@@ -98,12 +69,9 @@ class BaseStrategy(ABC):
                 if df is None:
                     continue
 
-                indicators = self.compute_indicators(df)
-                is_meet, info = self.check_conditions(df, indicators)
+                is_meet, info = self.check_conditions(df)
 
                 if is_meet:
-                    trade_date = df.iloc[-1]["date"] if "date_orig" not in df.columns else date.today()
-                    self.save_indicators(code, trade_date, indicators, session)
                     entry = {"stock_code": code}
                     if info:
                         entry.update(info)
