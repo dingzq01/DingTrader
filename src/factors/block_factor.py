@@ -496,10 +496,12 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     if "market_state" not in result.columns:
         result["market_state"] = None
 
-    # 排名先置 NULL，后续通过 SQL 窗口函数更新
-    # market 行的 market_rank 已在 _compute_market_scores 中设为 0
+    # 初始 market_rank（non-market 先 NULL，market=0）
+    # 后续通过 SQL 窗口函数更新 non-market 的真实排名
     if "market_rank" not in result.columns:
         result["market_rank"] = None
+    # 将 float64 转为可为 null 的 Int64，避免 psycopg2 integer out of range
+    result["market_rank"] = result["market_rank"].astype("Int64")
 
     return result
 
