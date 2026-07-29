@@ -67,6 +67,39 @@ class BlockFactorDaily(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class BlockMainlineDaily(Base):
+    """板块每日主线状态表 (TimescaleDB hypertable)。
+
+    Direction Engine — 从 block_factor_daily 计算板块主线状态。
+    应用状态机决定板块是否可交易（主战场/主主线）。
+    Market 作为特殊板块，使用独立的大盘状态机。
+    数据来源：block_factor_daily。
+    """
+
+    __tablename__ = "block_mainline_daily"
+
+    trade_date = Column(Date, primary_key=True)
+    block_code = Column(String(32), primary_key=True)
+    block_name = Column(String(100), nullable=False)
+    block_type = Column(String(20), nullable=False)
+
+    mainline_score = Column(Float, nullable=False)
+    mainline_status = Column(String(20), nullable=False)
+    continuous_days = Column(Integer, nullable=False, default=1)
+    confidence = Column(Float)
+    tradeable = Column(Boolean, nullable=False, default=False)
+    priority = Column(Integer)
+    position_ratio = Column(Float)
+    avg_score_5d = Column(Float)
+    avg_rank_5d = Column(Float)
+    first_mainline_date = Column(Date)
+    peak_score = Column(Float)
+    mainline_round = Column(Integer)
+    reason = Column(String(500))
+    factor_version = Column(String(20), default="v1.0")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class StockBlockRelation(Base):
     """板块-个股关系主链路。"""
 
@@ -511,5 +544,23 @@ def init_db(engine=None):
         # 为已有 block_factor_daily 表添加 market_state 列
         if _table_exists(conn, "block_factor_daily") and not _column_exists(conn, "block_factor_daily", "market_state"):
             conn.execute(text("ALTER TABLE block_factor_daily ADD COLUMN market_state VARCHAR(20)"))
+
+        # block_mainline_daily hypertable
+        conn.execute(
+            text(
+                "SELECT create_hypertable('block_mainline_daily', 'trade_date', "
+                "chunk_time_interval => INTERVAL '1 month', "
+                "if_not_exists => TRUE)"
+            )
+        )
+        # 建立 block_mainline_daily 索引
+        for idx_col, idx_name in [
+            ("trade_date", "idx_mainline_date"),
+            ("block_code", "idx_mainline_code"),
+            ("block_type", "idx_mainline_type"),
+            ("mainline_score", "idx_mainline_score"),
+            ("mainline_status", "idx_mainline_status"),
+        ]:
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON block_mainline_daily ({idx_col})"))
 
         conn.commit()

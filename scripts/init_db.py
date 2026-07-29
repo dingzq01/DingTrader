@@ -51,6 +51,11 @@ def main():
     compute_block_factor_daily(engine)
     logger.info("block_factor_refreshed")
 
+    # 8. 板块主线表初始填充
+    from src.factors.block_mainline import compute_block_mainline_daily
+    compute_block_mainline_daily(engine)
+    logger.info("block_mainline_refreshed")
+
     logger.info("init_db_completed")
 
 
