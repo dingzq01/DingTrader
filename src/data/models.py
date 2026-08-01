@@ -71,8 +71,7 @@ class BlockMainlineDaily(Base):
     """板块每日主线状态表 (TimescaleDB hypertable)。
 
     Direction Engine — 从 block_factor_daily 计算板块主线状态。
-    应用状态机决定板块是否可交易（主战场/主主线）。
-    Market 作为特殊板块，使用独立的大盘状态机。
+    计算滚动指标、主线强度评分、横截面排名，应用状态机判定板块主线状态。
     数据来源：block_factor_daily。
     """
 
@@ -83,19 +82,28 @@ class BlockMainlineDaily(Base):
     block_name = Column(String(100), nullable=False)
     block_type = Column(String(20), nullable=False)
 
-    mainline_score = Column(Float, nullable=False)
+    # 因子评分（来源于 block_factor_daily）
+    total_score = Column(Float)
+    # 滚动指标
+    score_ma5 = Column(Float)
+    score_ma20 = Column(Float)
+    score_ma5_change = Column(Float)
+    score_ma20_change = Column(Float)
+    rank_raw = Column(Integer)
+    rank_ma5 = Column(Float)
+    rank_ma20 = Column(Float)
+    rank_change_5d = Column(Float)
+    rank_deviation_5d = Column(Float)
+    rank_std_5d = Column(Float)
+    # 主线强度评分 & 排名
+    mainline_strength_score = Column(Float, nullable=False)
+    mainline_rank = Column(Integer)
+    # 状态机
     mainline_status = Column(String(20), nullable=False)
     continuous_days = Column(Integer, nullable=False, default=1)
-    confidence = Column(Float)
-    tradeable = Column(Boolean, nullable=False, default=False)
-    priority = Column(Integer)
-    position_ratio = Column(Float)
-    avg_score_5d = Column(Float)
-    avg_rank_5d = Column(Float)
     first_mainline_date = Column(Date)
-    peak_score = Column(Float)
     mainline_round = Column(Integer)
-    reason = Column(String(500))
+
     factor_version = Column(String(20), default="v1.0")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -558,9 +566,21 @@ def init_db(engine=None):
             ("trade_date", "idx_mainline_date"),
             ("block_code", "idx_mainline_code"),
             ("block_type", "idx_mainline_type"),
-            ("mainline_score", "idx_mainline_score"),
-            ("mainline_status", "idx_mainline_status"),
         ]:
             conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON block_mainline_daily ({idx_col})"))
+
+        # 复合索引（plan09 新增）
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_block_mainline_date_status "
+            "ON block_mainline_daily (trade_date, mainline_status)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_block_mainline_rank "
+            "ON block_mainline_daily (trade_date, mainline_rank)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_block_mainline_code_date "
+            "ON block_mainline_daily (block_code, trade_date)"
+        ))
 
         conn.commit()

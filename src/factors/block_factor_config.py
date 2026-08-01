@@ -76,7 +76,7 @@ BLOCK_FACTOR_CONFIG: dict[str, dict] = {
         "weight": 0.25,
         "sub_factors": {
             "avg_change_pct": {
-                "weight": 0.4,
+                "weight": 0.5,
                 "tiers": [
                     (-100,  -3,   0),
                     (-3,     0,  20),
@@ -97,7 +97,7 @@ BLOCK_FACTOR_CONFIG: dict[str, dict] = {
                 ],
             },
             "up_ratio": {
-                "weight": 0.3,
+                "weight": 0.2,
                 "tiers": [
                     (0,    0.30,   0),
                     (0.30, 0.50,  40),
