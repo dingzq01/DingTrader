@@ -109,14 +109,6 @@ WHERE bfd.trade_date = ranked.trade_date
 # ---------------------------------------------------------------------------
 
 
-def _minmax_standardize(series: pd.Series) -> pd.Series:
-    """Min-max 标准化到 0-100，所有值相同时返回 50。"""
-    mn, mx = series.min(), series.max()
-    if mx - mn < 1e-9:
-        return pd.Series(50.0, index=series.index)
-    return ((series - mn) / (mx - mn)) * 100.0
-
-
 def _tiered_score(series: pd.Series, tiers: list[tuple[float, float, float]]) -> pd.Series:
     """根据分段阈值打分。
 
@@ -367,11 +359,9 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     heat_cfg = cfg["heat_factor"]
     heat_parts = {}
     for sub_name, sub_cfg in heat_cfg["sub_factors"].items():
-        # 对每个交易日单独做标准化
         raw_col = sub_name
-        norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
-        heat_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
+        tier_score = _tiered_score(non_market[raw_col].fillna(0), sub_cfg["tiers"])
+        heat_parts[sub_name] = tier_score * sub_cfg["weight"]
     non_market["heat_score"] = sum(heat_parts.values())
 
     # --- strength_factor (tiered scoring) ---
@@ -396,9 +386,8 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     profit_parts = {}
     for sub_name, sub_cfg in profit_cfg["sub_factors"].items():
         raw_col = sub_name  # limit_up_ratio, gt_5_ratio, up_ratio
-        norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
-        profit_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
+        tier_score = _tiered_score(non_market[raw_col].fillna(0), sub_cfg["tiers"])
+        profit_parts[sub_name] = tier_score * sub_cfg["weight"]
     non_market["profit_score"] = sum(profit_parts.values())
 
     # --- persistence_factor ---
@@ -411,9 +400,8 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     }
     for sub_name, sub_cfg in persist_cfg["sub_factors"].items():
         raw_col = col_map_persist[sub_name]
-        norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
-        persist_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
+        tier_score = _tiered_score(non_market[raw_col].fillna(0), sub_cfg["tiers"])
+        persist_parts[sub_name] = tier_score * sub_cfg["weight"]
     non_market["persistence_score"] = sum(persist_parts.values())
 
     # --- capital_factor ---
@@ -421,9 +409,8 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     capital_parts = {}
     for sub_name, sub_cfg in capital_cfg["sub_factors"].items():
         raw_col = sub_name  # amount_ratio_change, amount_growth
-        norm_col = f"{sub_name}_score"
-        non_market[norm_col] = non_market.groupby("trade_date")[raw_col].transform(_minmax_standardize)
-        capital_parts[sub_name] = non_market[norm_col] * sub_cfg["weight"]
+        tier_score = _tiered_score(non_market[raw_col].fillna(0), sub_cfg["tiers"])
+        capital_parts[sub_name] = tier_score * sub_cfg["weight"]
     non_market["capital_score"] = sum(capital_parts.values())
 
     # --- risk_penalty ---

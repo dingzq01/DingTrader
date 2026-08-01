@@ -25,10 +25,46 @@ BLOCK_FACTOR_CONFIG: dict[str, dict] = {
         "column": "heat_score",
         "weight": 0.20,
         "sub_factors": {
-            "amount_ratio":        {"weight": 0.2},  # 板块成交额 / 市场总成交额
-            "amount_ratio_change": {"weight": 0.4},  # amount_ratio - MA(amount_ratio, 5)
-            "amount_growth_5d":    {"weight": 0.3},  # today_amount / MA(amount, 5) - 1
-            "amount_zscore":       {"weight": 0.1},  # (amount - MA20(amount)) / STD20(amount)
+            "amount_ratio": {
+                "weight": 0.2,  # 板块成交额 / 市场总成交额
+                "tiers": [
+                    (0,     0.003, 15),
+                    (0.003, 0.01,  40),
+                    (0.01,  0.02,  60),
+                    (0.02,  0.04,  80),
+                    (0.04,  1,    100),
+                ],
+            },
+            "amount_ratio_change": {
+                "weight": 0.4,  # amount_ratio - MA(amount_ratio, 5)
+                "tiers": [
+                    (-100, -0.3,  0),
+                    (-0.3, -0.1, 30),
+                    (-0.1,  0.1, 50),
+                    (0.1,   0.3, 80),
+                    (0.3,   100, 100),
+                ],
+            },
+            "amount_growth_5d": {
+                "weight": 0.3,  # today_amount / MA(amount, 5) - 1
+                "tiers": [
+                    (-100, -0.2,  0),
+                    (-0.2, -0.05, 20),
+                    (-0.05, 0.05, 50),
+                    (0.05,  0.2,  75),
+                    (0.2,   100,  100),
+                ],
+            },
+            "amount_zscore": {
+                "weight": 0.1,  # (amount - MA20(amount)) / STD20(amount)
+                "tiers": [
+                    (-100, -1, 20),
+                    (-1,    0, 40),
+                    (0,     1, 60),
+                    (1,     2, 80),
+                    (2,   100, 100),
+                ],
+            },
         },
     },
 
@@ -80,9 +116,36 @@ BLOCK_FACTOR_CONFIG: dict[str, dict] = {
         "column": "profit_score",
         "weight": 0.20,
         "sub_factors": {
-            "limit_up_ratio": {"weight": 0.4},  # limit_up_count / stock_count
-            "gt_5_ratio":     {"weight": 0.3},  # gt_5_count / stock_count
-            "up_ratio":       {"weight": 0.3},  # up_ratio
+            "limit_up_ratio": {
+                "weight": 0.4,  # limit_up_count / stock_count
+                "tiers": [
+                    (0,    0.01, 20),
+                    (0.01, 0.03, 50),
+                    (0.03, 0.05, 75),
+                    (0.05, 0.1,  90),
+                    (0.1,  1,   100),
+                ],
+            },
+            "gt_5_ratio": {
+                "weight": 0.3,  # gt_5_count / stock_count
+                "tiers": [
+                    (0,   0.1, 20),
+                    (0.1, 0.3, 50),
+                    (0.3, 0.5, 75),
+                    (0.5, 0.7, 90),
+                    (0.7, 1,  100),
+                ],
+            },
+            "up_ratio": {
+                "weight": 0.3,  # up_ratio
+                "tiers": [
+                    (0,    0.3,  0),
+                    (0.3,  0.5, 40),
+                    (0.5,  0.7, 70),
+                    (0.7,  0.85, 90),
+                    (0.85, 1,   100),
+                ],
+            },
         },
     },
 
@@ -93,9 +156,36 @@ BLOCK_FACTOR_CONFIG: dict[str, dict] = {
         "column": "persistence_score",
         "weight": 0.20,
         "sub_factors": {
-            "ma5_avg_change":   {"weight": 0.4},  # MA(avg_change_pct, 5)
-            "ma5_up_ratio":     {"weight": 0.3},  # MA(up_ratio, 5)
-            "ma5_amount_growth": {"weight": 0.3},  # MA(amount_growth, 5)
+            "ma5_avg_change": {
+                "weight": 0.4,  # MA(avg_change_pct, 5)
+                "tiers": [
+                    (-100, -3,  0),
+                    (-3,    0, 30),
+                    (0,     1, 60),
+                    (1,     3, 80),
+                    (3,   100, 100),
+                ],
+            },
+            "ma5_up_ratio": {
+                "weight": 0.3,  # MA(up_ratio, 5)
+                "tiers": [
+                    (0,    0.3,  20),
+                    (0.3,  0.5,  50),
+                    (0.5,  0.7,  75),
+                    (0.7,  0.85, 90),
+                    (0.85, 1,   100),
+                ],
+            },
+            "ma5_amount_growth": {
+                "weight": 0.3,  # MA(amount_growth, 5)
+                "tiers": [
+                    (-100, -0.2, 20),
+                    (-0.2,  0,   40),
+                    (0,     0.1, 60),
+                    (0.1,   0.3, 80),
+                    (0.3,   100, 100),
+                ],
+            },
         },
     },
 
@@ -106,8 +196,26 @@ BLOCK_FACTOR_CONFIG: dict[str, dict] = {
         "column": "capital_score",
         "weight": 0.15,
         "sub_factors": {
-            "amount_ratio_change": {"weight": 0.5},
-            "amount_growth":       {"weight": 0.5},
+            "amount_ratio_change": {
+                "weight": 0.5,
+                "tiers": [
+                    (-100, -0.2,  20),
+                    (-0.2, -0.05, 40),
+                    (-0.05, 0.05, 50),
+                    (0.05,  0.2,  80),
+                    (0.2,   100,  100),
+                ],
+            },
+            "amount_growth": {
+                "weight": 0.5,
+                "tiers": [
+                    (-100, -0.3,  0),
+                    (-0.3, -0.1, 20),
+                    (-0.1,  0.1, 50),
+                    (0.1,   0.3, 80),
+                    (0.3,   100, 100),
+                ],
+            },
         },
     },
 
