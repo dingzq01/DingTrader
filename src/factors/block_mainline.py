@@ -335,22 +335,17 @@ def compute_block_mainline_daily(engine) -> int:
 
         # 6. 计算 mainline_rank：每日横截面按 mainline_strength_score DESC 排名
         # market 固定 0，不参与普通板块排名
-        def _rank_daily(group: pd.DataFrame) -> pd.Series:
-            result = pd.Series(0, index=group.index, dtype="Int64")
-            non_market = group["block_type"] != "market"
-            if non_market.any():
-                result[non_market] = (
-                    group.loc[non_market, "mainline_strength_score"]
-                    .rank(ascending=False, method="min")
-                    .astype("Int64")
-                )
-            return result
-
-        factor_df["mainline_rank"] = (
-            factor_df.groupby("trade_date", group_keys=False)
-            .apply(_rank_daily)
-            .reset_index(level=0, drop=True)
-        )
+        factor_df["mainline_rank"] = 0
+        non_market_mask = factor_df["block_type"] != "market"
+        if non_market_mask.any():
+            factor_df.loc[non_market_mask, "mainline_rank"] = (
+                factor_df.loc[non_market_mask]
+                .groupby("trade_date")["mainline_strength_score"]
+                .rank(ascending=False, method="min")
+                .astype("Int64")
+            )
+        # 确保 mainline_rank 为 Int64（避免 psycopg2 integer out of range）
+        factor_df["mainline_rank"] = factor_df["mainline_rank"].astype("Int64")
 
         # 7. 确定需要处理的新日期
         last_date_ts = pd.to_datetime(last_date)
@@ -446,6 +441,12 @@ def compute_block_mainline_daily(engine) -> int:
             return 0
 
         result_df = pd.DataFrame(results)
+
+        # 将 integer 列转为可为 null 的 Int64，避免 psycopg2 integer out of range
+        # （混合 int/None 时 pandas 默认使用 float64，psycopg2 无法正确处理 Float → Integer 映射）
+        for col in ("rank_raw", "mainline_rank"):
+            if col in result_df.columns:
+                result_df[col] = result_df[col].astype("Int64")
 
         # 9. 插入/更新
         records = _to_records(result_df)
