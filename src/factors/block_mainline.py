@@ -186,8 +186,36 @@ def _determine_status(row: pd.Series) -> str:
 
 
 def _to_records(df: pd.DataFrame) -> list[dict]:
-    """将 DataFrame 转换为 list[dict]，NaN/NaT 转为 None（SQL NULL）。"""
-    return df.where(pd.notna(df), None).to_dict("records")
+    """将 DataFrame 转换为 list[dict]，NaN/NaT/pd.NA 转为 None（SQL NULL）。
+
+    手动逐行转换，确保所有值都是 Python 原生类型（int/float/str/None），
+    避免 numpy/pandas 类型导致 psycopg2 类型映射错误。
+    """
+    records = []
+    for _, row in df.iterrows():
+        record = {}
+        for k, v in row.items():
+            if v is None:
+                record[k] = None
+            elif isinstance(v, (np.integer,)):
+                record[k] = int(v)
+            elif isinstance(v, (np.floating,)):
+                val = float(v)
+                record[k] = None if np.isnan(val) or np.isinf(val) else val
+            elif isinstance(v, pd.Timestamp):
+                record[k] = v.date()
+            elif isinstance(v, (np.bool_,)):
+                record[k] = bool(v)
+            else:
+                try:
+                    if pd.isna(v):
+                        record[k] = None
+                    else:
+                        record[k] = v
+                except (TypeError, ValueError):
+                    record[k] = v
+        records.append(record)
+    return records
 
 
 def _build_prev_state(prev_df: pd.DataFrame) -> dict:
