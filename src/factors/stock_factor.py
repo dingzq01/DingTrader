@@ -131,14 +131,13 @@ def _compute_all_scores(states_df: pd.DataFrame) -> pd.DataFrame:
             lambda row: _compute_factor_score(row, cfg), axis=1
         )
 
-    # total_score = 各加权因子 + risk_penalty
+    # total_score = 各加权因子求和
+    # 注意：risk_penalty 仍单独计算并入库，但不计入 total_score（扣分逻辑保留，仅不纳入总分）
     total = pd.Series(0.0, index=result.index)
     for factor_key, cfg in STOCK_FACTOR_CONFIG.items():
         col_name = cfg["column"]
-        if "weight" in cfg:
+        if cfg.get("weight"):
             total += result[col_name] * cfg["weight"]
-        else:
-            total += result[col_name]  # risk_penalty 直接加
     result["total_score"] = total
 
     # 排名先填充 NULL，稍后通过 SQL 窗口函数更新

@@ -260,6 +260,12 @@ class StockIndicatorDaily(Base):
     capital_life = Column(Float)
     capital_life_ma = Column(Float)
 
+    # 价格区间特征（历史最高/最低价，含当前交易日）
+    high20 = Column(Float)
+    high60 = Column(Float)
+    low20 = Column(Float)
+    low60 = Column(Float)
+
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -289,8 +295,11 @@ class StockStateDaily(Base):
     macd_bullish = Column(Boolean)
     macd_golden_cross = Column(Boolean)
     macd_dead_cross = Column(Boolean)
-    macd_hist_positive = Column(Boolean)
     macd_hist_increasing = Column(Boolean)
+    macd_hist_increasing_days = Column(Integer)
+    macd_hist_decreasing_days = Column(Integer)
+    macd_trough = Column(Boolean)
+    macd_bottom_divergence = Column(Boolean)
 
     # KDJ 状态
     kdj_golden_cross = Column(Boolean)
@@ -582,5 +591,26 @@ def init_db(engine=None):
             "CREATE INDEX IF NOT EXISTS idx_block_mainline_code_date "
             "ON block_mainline_daily (block_code, trade_date)"
         ))
+
+        # ---- plan10 迁移：stock_indicator_daily 增加价格区间特征 ----
+        if _table_exists(conn, "stock_indicator_daily"):
+            for col_name in ("high20", "high60", "low20", "low60"):
+                if not _column_exists(conn, "stock_indicator_daily", col_name):
+                    conn.execute(text(f"ALTER TABLE stock_indicator_daily ADD COLUMN {col_name} FLOAT"))
+
+        # ---- plan10 迁移：stock_state_daily 结构调整 ----
+        if _table_exists(conn, "stock_state_daily"):
+            # 删除 macd_hist_positive（等价于 macd_bullish，plan10 第九节）
+            if _column_exists(conn, "stock_state_daily", "macd_hist_positive"):
+                conn.execute(text("ALTER TABLE stock_state_daily DROP COLUMN macd_hist_positive"))
+            # 新增持续时间/事件状态
+            for col_name, col_type in (
+                ("macd_hist_increasing_days", "INTEGER"),
+                ("macd_hist_decreasing_days", "INTEGER"),
+                ("macd_trough", "BOOLEAN"),
+                ("macd_bottom_divergence", "BOOLEAN"),
+            ):
+                if not _column_exists(conn, "stock_state_daily", col_name):
+                    conn.execute(text(f"ALTER TABLE stock_state_daily ADD COLUMN {col_name} {col_type}"))
 
         conn.commit()

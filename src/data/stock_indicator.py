@@ -184,6 +184,14 @@ def _compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     result["d_value"] = d
     result["j_value"] = 3 * k - 2 * d
 
+    # ---- 价格区间特征（历史 HHV/LLV，含当前交易日）----
+    # 注意：high20/high60/low20/low60 包含当前交易日，属于历史价格特征。
+    # 突破状态判定必须使用 high20.shift(1) / high60.shift(1)，避免当前 K 线自包含。
+    result["high20"] = _tdx_hhv(high, 20)
+    result["high60"] = _tdx_hhv(high, 60)
+    result["low20"] = _tdx_llv(low, 20)
+    result["low60"] = _tdx_llv(low, 60)
+
     # ---- 主力做多做空资金线 ----
     var0 = (2 * close + high + low) / 4
     llv26 = _tdx_llv(low, 26)
@@ -234,6 +242,7 @@ _COLS = [
     "k_value", "d_value", "j_value",
     "capital_fast", "capital_slow",
     "capital_life", "capital_life_ma",
+    "high20", "high60", "low20", "low60",
 ]
 
 _INSERT_COLS = ",\n    ".join(_COLS)
@@ -276,7 +285,7 @@ def compute_stock_indicator_daily(engine) -> int:
         last_date = conn.execute(
             text(
                 "SELECT COALESCE(MAX(trade_date), CAST(:default_date AS date)) "
-                "FROM stock_indicator_daily"
+                "FROM stock_indicator_daily WHERE high20 IS NOT NULL"
             ),
             {"default_date": default_date},
         ).scalar()

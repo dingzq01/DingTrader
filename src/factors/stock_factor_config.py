@@ -73,7 +73,7 @@ STOCK_FACTOR_CONFIG: dict[str, dict] = {
 
     "risk_factor": {
         "column": "risk_penalty",
-        # 风险因子没有 weight — 直接作为扣分项加入 total_score
+        # 风险因子没有 weight — 单独计算并入库，不加入 total_score（扣分逻辑保留，仅不计入总分）
         "rules": {
             "extreme_up": -20,
             "extreme_down": -30,

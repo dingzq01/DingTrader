@@ -24,7 +24,9 @@ _STATE_COLS = [
     "ma5_above_ma20", "ma20_above_ma60",
     "trend_short_bull", "trend_mid_bull",
     "macd_bullish", "macd_golden_cross", "macd_dead_cross",
-    "macd_hist_positive", "macd_hist_increasing",
+    "macd_hist_increasing",
+    "macd_hist_increasing_days", "macd_hist_decreasing_days",
+    "macd_trough", "macd_bottom_divergence",
     "kdj_golden_cross", "kdj_over_buy", "kdj_over_sell",
     "volume_expand", "volume_shrink", "price_volume_confirm",
     "obv_above_ma20", "obv_rising", "obv_price_divergence",
@@ -53,7 +55,7 @@ ON CONFLICT (trade_date, stock_code) DO UPDATE SET
     created_at = EXCLUDED.created_at
 """
 
-# 读取数据的 JOIN SQL：从 stock_indicator_daily 获取所有指标，从 stock_data 获取 close/volume/change_pct
+# 读取数据的 JOIN SQL：从 stock_indicator_daily 获取所有指标，从 stock_data 获取 close/volume/change_pct/low
 _JOIN_SQL = """
 SELECT
     si.trade_date,
@@ -68,7 +70,9 @@ SELECT
     si.obv, si.obv_ma20,
     si.k_value, si.d_value, si.j_value,
     si.capital_fast, si.capital_slow,
-    si.capital_life, si.capital_life_ma
+    si.capital_life, si.capital_life_ma,
+    si.high20, si.high60, si.low20, si.low60,
+    sd.low
 FROM stock_indicator_daily si
 JOIN stock_data sd ON si.trade_date = sd.trade_date AND si.stock_code = sd.code
 WHERE si.stock_code = :stock_code
@@ -97,7 +101,7 @@ def compute_stock_state_daily(engine) -> int:
         last_date = conn.execute(
             text(
                 "SELECT COALESCE(MAX(trade_date), CAST(:default_date AS date)) "
-                "FROM stock_state_daily"
+                "FROM stock_state_daily WHERE macd_trough IS NOT NULL"
             ),
             {"default_date": default_date},
         ).scalar()

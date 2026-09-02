@@ -324,13 +324,13 @@ def _compute_market_scores(market_df: pd.DataFrame) -> pd.DataFrame:
     result["risk_penalty"] = result["risk_penalty"].clip(lower=risk_cfg["floor"])
 
     # --- total_score (0-100) ---
+    # total_score = 各加权因子求和；risk_penalty 仍单独计算并入库，但不计入总分
     result["total_score"] = (
         result["heat_score"] * heat_cfg["weight"]
         + result["strength_score"] * strength_cfg["weight"]
         + result["profit_score"] * profit_cfg["weight"]
         + result["capital_score"] * capital_cfg["weight"]
         + result["persistence_score"] * persist_cfg["weight"]
-        + result["risk_penalty"]
     )
     result["total_score"] = result["total_score"].clip(0, 100)
 
@@ -440,6 +440,7 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
     non_market.loc[extreme_mask, "risk_penalty"] += extreme_cfg["penalty"]
 
     # --- total_score ---
+    # total_score = 各加权因子求和；risk_penalty 仍单独计算并入库，但不计入总分
     total_weights = {
         "heat_score": cfg["heat_factor"]["weight"],
         "strength_score": cfg["strength_factor"]["weight"],
@@ -453,7 +454,6 @@ def _standardize_and_combine(df: pd.DataFrame) -> pd.DataFrame:
         + non_market["profit_score"] * total_weights["profit_score"]
         + non_market["persistence_score"] * total_weights["persistence_score"]
         + non_market["capital_score"] * total_weights["capital_score"]
-        + non_market["risk_penalty"]
     )
 
     # --- 将 non_market 的评分合并回 result ---
