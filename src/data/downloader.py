@@ -96,10 +96,12 @@ def download_stock_kline(
         mask = df["prev_close"].isna() | (df["prev_close"] <= 0)
         df.loc[mask, "change_pct"] = None
 
-        # 计算 turnover = volume / ActiveCapital * 100
+        # 计算 turnover 换手率（%）：Volume 单位为股，ActiveCapital(流通股本) 单位为万股，
+        # turnover = Volume / (ActiveCapital × 10000) × 100 = Volume / ActiveCapital × 0.01。
+        # 注意：volume / ActiveCapital * 100 的结果比真实换手率大 10000 倍，必须再除以 10000。
         active_capital = stock_info.get("ActiveCapital") if stock_info else 0
         if active_capital and active_capital > 0:
-            df["turnover"] = df["volume"] / active_capital * 100
+            df["turnover"] = df["volume"] / active_capital * 100 / 10000
         else:
             df["turnover"] = None
 
