@@ -8,6 +8,7 @@ from sqlalchemy import (
     Float,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     create_engine,
     text,
@@ -366,6 +367,89 @@ class StockFactorDaily(Base):
     block_rank = Column(Integer)
 
     factor_version = Column(String(20), default="v1.0")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class StrategyDefinition(Base):
+    """策略定义表。
+
+    Strategy 规则与参数配置持久化，与回测实验 (backtest_run) 分开存储。
+    strategy_name + strategy_version 唯一，每次规则实质变化应创建新版本而非覆盖旧版本。
+    """
+
+    __tablename__ = "strategy_definition"
+    __table_args__ = (
+        UniqueConstraint("strategy_name", "strategy_version", name="uq_strategy_definition"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strategy_name = Column(String(50), nullable=False)
+    strategy_version = Column(String(20), nullable=False)
+    strategy_type = Column(String(50), nullable=False)
+    description = Column(String(500))
+    entry_rule = Column(Text)          # 可读的买入规则描述
+    exit_rule = Column(Text)           # 可读的卖出规则描述
+    parameter_config = Column(Text)    # JSON 参数配置
+    status = Column(String(20), default="active")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class BacktestRun(Base):
+    """单次回测实验记录。
+
+    记录一次具体回测实验的策略版本、日期范围、初始资金与回测环境配置。
+    """
+
+    __tablename__ = "backtest_run"
+
+    run_id = Column(String(32), primary_key=True)
+    strategy_name = Column(String(50), nullable=False)
+    strategy_version = Column(String(20), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    initial_capital = Column(Float, nullable=False)
+    backtest_config = Column(Text)     # JSON：commission/stamp_tax/slippage/max_positions/position_size/use_factor...
+    stock_count = Column(Integer)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class BacktestResultRecord(Base):
+    """回测总体结果表（一次 run 一条）。"""
+
+    __tablename__ = "backtest_result"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(32), nullable=False, index=True)
+    total_return = Column(Float)
+    annual_return = Column(Float)
+    max_drawdown = Column(Float)
+    sharpe_ratio = Column(Float)
+    win_rate = Column(Float)
+    profit_factor = Column(Float)
+    trade_count = Column(Integer)
+    avg_trade_return = Column(Float)
+    avg_holding_days = Column(Float)
+    max_single_trade_return = Column(Float)
+    max_single_trade_loss = Column(Float)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class BacktestTrade(Base):
+    """每笔完整交易明细表（一次 run 多笔交易）。"""
+
+    __tablename__ = "backtest_trade"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(32), nullable=False, index=True)
+    stock_code = Column(String(10), nullable=False)
+    entry_date = Column(Date, nullable=False)
+    entry_price = Column(Float)
+    exit_date = Column(Date)
+    exit_price = Column(Float)
+    holding_days = Column(Integer)
+    return_pct = Column(Float)
+    exit_reason = Column(String(50))
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 

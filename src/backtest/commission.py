@@ -30,22 +30,3 @@ class AStockCommission(bt.CommInfoBase):
         if size < 0:
             commission += value * self.p.stamp_tax
         return commission
-
-
-class SlippageModel(bt.SlippageBase):
-    """固定百分比滑点模型."""
-
-    params = (("slippage_pct", 0.01),)
-
-    def __init__(self):
-        settings = get_settings().backtest
-        self.p.slippage_pct = settings.slippage
-        super().__init__()
-
-    def next(self):
-        price = self.data.close[0]
-        slippage = price * self.p.slippage_pct
-        if self.order.isbuy():
-            self.order.executed.price = price + slippage
-        else:
-            self.order.executed.price = price - slippage
