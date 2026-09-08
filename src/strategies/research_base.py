@@ -26,6 +26,9 @@ class StrategyData:
 
     factor_rank: 0~1 的横截面排名百分位 (越小代表排名越靠前)，
                  未启用 Factor 或该日无因子数据时为 None。
+
+    macd_bottom_divergence: 当日是否新确认 MACD 底背离事件
+                  (来自 stock_state_daily，事件信号而非持续状态)。
     """
 
     trade_date: datetime.date
@@ -41,6 +44,7 @@ class StrategyData:
     macd_hist: float
     macd_hist_increasing: bool
     macd_hist_increasing_days: int
+    macd_bottom_divergence: bool = False
     factor_rank: float | None = None
 
     def as_dict(self) -> dict:

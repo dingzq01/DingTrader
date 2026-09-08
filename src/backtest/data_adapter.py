@@ -48,6 +48,7 @@ SELECT
     si.macd_dif, si.macd_dea, si.macd_hist,
     ss.macd_hist_increasing,
     ss.macd_hist_increasing_days,
+    ss.macd_bottom_divergence,
     sf.market_rank
 FROM stock_indicator_daily si
 JOIN stock_data sd
@@ -220,6 +221,7 @@ def row_to_strategy_data(row) -> StrategyData:
         macd_hist=_f("macd_hist"),
         macd_hist_increasing=_b("macd_hist_increasing"),
         macd_hist_increasing_days=_i("macd_hist_increasing_days"),
+        macd_bottom_divergence=_b("macd_bottom_divergence"),
         factor_rank=_f("factor_rank"),
     )
 

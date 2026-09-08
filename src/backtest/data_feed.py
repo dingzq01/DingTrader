@@ -84,6 +84,7 @@ class StockResearchFeed(bt.feeds.PandasData):
         macd_dif, macd_dea, macd_hist,
         macd_hist_increasing (来自 stock_state_daily),
         macd_hist_increasing_days (来自 stock_state_daily),
+        macd_bottom_divergence (来自 stock_state_daily, 底背离事件信号),
         factor_rank (0~1 百分位; 无因子数据时为 NaN)
 
     输入 DataFrame 需包含:
@@ -91,7 +92,8 @@ class StockResearchFeed(bt.feeds.PandasData):
         columns = open, high, low, close, volume,
                   ma5, ma10, ma20, ma60,
                   macd_dif, macd_dea, macd_hist,
-                  macd_hist_increasing, macd_hist_increasing_days, factor_rank
+                  macd_hist_increasing, macd_hist_increasing_days,
+                  macd_bottom_divergence, factor_rank
 
     停牌/未上市日期用 NaN 行占位，回测引擎据此跳过今日交易。
     """
@@ -106,6 +108,7 @@ class StockResearchFeed(bt.feeds.PandasData):
         "macd_hist",
         "macd_hist_increasing",
         "macd_hist_increasing_days",
+        "macd_bottom_divergence",
         "factor_rank",
     )
 
@@ -121,5 +124,6 @@ class StockResearchFeed(bt.feeds.PandasData):
         ("macd_hist", "macd_hist"),
         ("macd_hist_increasing", "macd_hist_increasing"),
         ("macd_hist_increasing_days", "macd_hist_increasing_days"),
+        ("macd_bottom_divergence", "macd_bottom_divergence"),
         ("factor_rank", "factor_rank"),
     )

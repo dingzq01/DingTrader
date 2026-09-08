@@ -68,6 +68,7 @@ def lines_to_strategy_data(data, trade_date: datetime.date) -> StrategyData:
         macd_hist=_f(data.macd_hist),
         macd_hist_increasing=_b(data.macd_hist_increasing),
         macd_hist_increasing_days=_i(data.macd_hist_increasing_days),
+        macd_bottom_divergence=_b(data.macd_bottom_divergence),
         factor_rank=_f(data.factor_rank),
     )
 
