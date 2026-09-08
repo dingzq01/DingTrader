@@ -18,5 +18,7 @@ def meets_entry_rules(data) -> bool:
 
 
 def meets_exit_rules(data) -> bool:
-    """MACD 底背离 V1 卖出规则: ma5 < ma10。"""
+    """MACD 底背离 V1 卖出规则: ma5 < ma10 (指标缺失时不卖出)。"""
+    if data.ma5 is None or data.ma10 is None:
+        return False
     return data.ma5 < data.ma10

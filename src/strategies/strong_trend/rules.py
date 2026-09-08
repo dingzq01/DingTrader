@@ -17,6 +17,10 @@ def meets_entry_rules(data, params: dict) -> bool:
     可选 (use_factor=true 时启用):
     6. factor_rank <= factor_rank_max (top 30%)
     """
+    # 任一输入指标缺失 (None/停牌缺行) 时视为条件不满足，不参与比较
+    required = (data.close, data.ma20, data.ma60, data.macd_dif, data.macd_dea)
+    if any(v is None for v in required):
+        return False
     if not (data.close > data.ma20 and data.ma20 > data.ma60):
         return False
     if not data.macd_dif > data.macd_dea:
@@ -37,5 +41,7 @@ def meets_entry_rules(data, params: dict) -> bool:
 
 
 def meets_exit_rules(data) -> bool:
-    """Strong Trend V1 卖出规则: ma5 < ma10。"""
+    """Strong Trend V1 卖出规则: ma5 < ma10 (指标缺失时不卖出)。"""
+    if data.ma5 is None or data.ma10 is None:
+        return False
     return data.ma5 < data.ma10
